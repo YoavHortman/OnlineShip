@@ -37,6 +37,14 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 export var x = 1;
 function main2() {
     var localConnection = new RTCPeerConnection();
+    localConnection.onicecandidateerror = function (ev) {
+        console.log("onicecandidateerror", ev);
+        debugger;
+    };
+    localConnection.onnegotiationneeded = function (ev) {
+        console.log("onnegotiationneeded", ev);
+        debugger;
+    };
     localConnection.ondatachannel = function (ev) {
         console.log("Connected to datachannel");
         var channel = ev.channel;

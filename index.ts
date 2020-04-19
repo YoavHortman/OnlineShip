@@ -3,15 +3,32 @@ export const x = 1;
 function main1() {
     const localConnection = new RTCPeerConnection();
 
+    localConnection.onicecandidateerror = (ev: RTCPeerConnectionIceErrorEvent) => {
+        console.log("onicecandidateerror", ev);
+        debugger;
+    };
+
+    localConnection.onnegotiationneeded = (ev: Event) => {
+        console.log("onnegotiationneeded", ev);
+        debugger;
+    };
+
     const sendChannel = localConnection.createDataChannel("sendChannel");
     sendChannel.onopen = (ev: Event) => {
+        console.log("onopen event");
         setTimeout(() => {
             console.log("Sending HELLO");
             sendChannel.send("HELLO");
         }, 10000);
     };
 
+    sendChannel.onerror = (err: RTCErrorEvent) => {
+        console.log("error", err);
+        debugger;
+    };
+
     sendChannel.onclose = (ev: Event) => {
+        console.log("close", close);
         debugger;
     };
 

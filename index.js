@@ -37,14 +37,28 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 export var x = 1;
 function main1() {
     var localConnection = new RTCPeerConnection();
+    localConnection.onicecandidateerror = function (ev) {
+        console.log("onicecandidateerror", ev);
+        debugger;
+    };
+    localConnection.onnegotiationneeded = function (ev) {
+        console.log("onnegotiationneeded", ev);
+        debugger;
+    };
     var sendChannel = localConnection.createDataChannel("sendChannel");
     sendChannel.onopen = function (ev) {
+        console.log("onopen event");
         setTimeout(function () {
             console.log("Sending HELLO");
             sendChannel.send("HELLO");
         }, 10000);
     };
+    sendChannel.onerror = function (err) {
+        console.log("error", err);
+        debugger;
+    };
     sendChannel.onclose = function (ev) {
+        console.log("close", close);
         debugger;
     };
     // const remoteConnection = new RTCPeerConnection();

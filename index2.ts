@@ -3,6 +3,16 @@ export const x = 1;
 function main2() {
     const localConnection = new RTCPeerConnection();
 
+    localConnection.onicecandidateerror = (ev: RTCPeerConnectionIceErrorEvent) => {
+        console.log("onicecandidateerror", ev);
+        debugger;
+    };
+
+    localConnection.onnegotiationneeded = (ev: Event) => {
+        console.log("onnegotiationneeded", ev);
+        debugger;
+    };
+
     localConnection.ondatachannel = (ev: RTCDataChannelEvent) => {
         console.log("Connected to datachannel");
         const channel = ev.channel;
@@ -21,7 +31,7 @@ function main2() {
                 localConnection.addIceCandidate(JSON.parse(atob(otherCanddiateBlob)));
             }
         }, 1000);
-     }
+    }
 
     localShit(localConnection);
 }
@@ -35,7 +45,7 @@ async function localShit(localConnection: RTCPeerConnection) {
     await localConnection.setRemoteDescription(JSON.parse(atob(remoteDescription)));
     const answer = await localConnection.createAnswer();
     await localConnection.setLocalDescription(answer)
- 
+
     console.log("ANSWER:");
     console.log(btoa(JSON.stringify(answer)));
     alert("Copy Answer from console");
