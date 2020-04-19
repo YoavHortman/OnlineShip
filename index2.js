@@ -35,9 +35,12 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 export var x = 1;
+var config = {
+    iceServers: [{ urls: "stun:stun.services.mozilla.org" }]
+};
 function main2() {
     var _this = this;
-    var localConnection = new RTCPeerConnection();
+    var localConnection = new RTCPeerConnection(config);
     localConnection.onicecandidateerror = function (ev) {
         console.log("onicecandidateerror", ev);
         debugger;
@@ -45,6 +48,9 @@ function main2() {
     localConnection.onnegotiationneeded = function (ev) {
         console.log("onnegotiationneeded", ev);
         debugger;
+    };
+    localConnection.oniceconnectionstatechange = function () {
+        console.log("oniceconnectionstatechange", localConnection.iceConnectionState);
     };
     localConnection.ondatachannel = function (ev) {
         console.log("Connected to datachannel");
@@ -54,6 +60,9 @@ function main2() {
         };
     };
     localConnection.onicecandidate = function (ev) {
+        if (!ev.candidate) {
+            return;
+        }
         console.log("ICE CANDIDATE:");
         console.log(btoa(JSON.stringify(ev.candidate)));
         alert('Copy ICE Candidate from console');

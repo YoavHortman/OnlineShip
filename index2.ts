@@ -1,7 +1,11 @@
 export const x = 1;
 
+const config: RTCConfiguration = {
+    iceServers: [{ urls: "stun:stun.services.mozilla.org" }]
+};
+
 function main2() {
-    const localConnection = new RTCPeerConnection();
+    const localConnection = new RTCPeerConnection(config);
 
     localConnection.onicecandidateerror = (ev: RTCPeerConnectionIceErrorEvent) => {
         console.log("onicecandidateerror", ev);
@@ -13,6 +17,10 @@ function main2() {
         debugger;
     };
 
+    localConnection.oniceconnectionstatechange = () => {
+        console.log("oniceconnectionstatechange", localConnection.iceConnectionState);
+    };
+
     localConnection.ondatachannel = (ev: RTCDataChannelEvent) => {
         console.log("Connected to datachannel");
         const channel = ev.channel;
@@ -22,6 +30,9 @@ function main2() {
     };
 
     localConnection.onicecandidate = (ev: RTCPeerConnectionIceEvent) => {
+        if (!ev.candidate) {
+            return;
+        }
         console.log("ICE CANDIDATE:");
         console.log(btoa(JSON.stringify(ev.candidate)));
         alert('Copy ICE Candidate from console');

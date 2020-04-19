@@ -1,7 +1,12 @@
 export const x = 1;
 
+const config: RTCConfiguration = {
+    iceServers: [{ urls: "stun:stun.services.mozilla.org" }]
+};
+
+
 function main1() {
-    const localConnection = new RTCPeerConnection();
+    const localConnection = new RTCPeerConnection(config);
 
     localConnection.onicecandidateerror = (ev: RTCPeerConnectionIceErrorEvent) => {
         console.log("onicecandidateerror", ev);
@@ -11,6 +16,10 @@ function main1() {
     localConnection.onnegotiationneeded = (ev: Event) => {
         console.log("onnegotiationneeded", ev);
         debugger;
+    };
+
+    localConnection.oniceconnectionstatechange = () => {
+        console.log("oniceconnectionstatechange", localConnection.iceConnectionState);
     };
 
     const sendChannel = localConnection.createDataChannel("sendChannel");
@@ -41,6 +50,10 @@ function main1() {
 
 
     localConnection.onicecandidate = (ev: RTCPeerConnectionIceEvent) => {
+        if (!ev.candidate) {
+            return;
+        }
+
         console.log("ICE CANDIDATE:");
         console.log(btoa(JSON.stringify(ev.candidate)));
         alert('Copy ICE Candidate from console');
@@ -67,8 +80,7 @@ function main1() {
 }
 
 async function localShit(localConnection: RTCPeerConnection) {
-    const offer = await localConnection.createOffer();
-    await localConnection.setLocalDescription(offer);
+    await (localConnection as any).setLocalDescription();
     console.log("LOCAL DESCRIPTION:");
     console.log(btoa(JSON.stringify(localConnection.localDescription)));
     alert('Copy LocalDescription from console');

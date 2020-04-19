@@ -35,9 +35,12 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 export var x = 1;
+var config = {
+    iceServers: [{ urls: "stun:stun.services.mozilla.org" }]
+};
 function main1() {
     var _this = this;
-    var localConnection = new RTCPeerConnection();
+    var localConnection = new RTCPeerConnection(config);
     localConnection.onicecandidateerror = function (ev) {
         console.log("onicecandidateerror", ev);
         debugger;
@@ -45,6 +48,9 @@ function main1() {
     localConnection.onnegotiationneeded = function (ev) {
         console.log("onnegotiationneeded", ev);
         debugger;
+    };
+    localConnection.oniceconnectionstatechange = function () {
+        console.log("oniceconnectionstatechange", localConnection.iceConnectionState);
     };
     var sendChannel = localConnection.createDataChannel("sendChannel");
     sendChannel.onopen = function (ev) {
@@ -67,6 +73,9 @@ function main1() {
     //     debugger;
     // };
     localConnection.onicecandidate = function (ev) {
+        if (!ev.candidate) {
+            return;
+        }
         console.log("ICE CANDIDATE:");
         console.log(btoa(JSON.stringify(ev.candidate)));
         alert('Copy ICE Candidate from console');
@@ -99,21 +108,18 @@ function main1() {
 }
 function localShit(localConnection) {
     return __awaiter(this, void 0, void 0, function () {
-        var offer, answerBlob;
+        var answerBlob;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, localConnection.createOffer()];
+                case 0: return [4 /*yield*/, localConnection.setLocalDescription()];
                 case 1:
-                    offer = _a.sent();
-                    return [4 /*yield*/, localConnection.setLocalDescription(offer)];
-                case 2:
                     _a.sent();
                     console.log("LOCAL DESCRIPTION:");
                     console.log(btoa(JSON.stringify(localConnection.localDescription)));
                     alert('Copy LocalDescription from console');
                     answerBlob = prompt("Paste Answer:");
                     return [4 /*yield*/, localConnection.setRemoteDescription(JSON.parse(atob(answerBlob)))];
-                case 3:
+                case 2:
                     _a.sent();
                     console.log("Added Remote Description");
                     return [2 /*return*/];
