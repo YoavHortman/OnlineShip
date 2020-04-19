@@ -36,6 +36,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 export var x = 1;
 function main1() {
+    var _this = this;
     var localConnection = new RTCPeerConnection();
     localConnection.onicecandidateerror = function (ev) {
         console.log("onicecandidateerror", ev);
@@ -69,12 +70,22 @@ function main1() {
         console.log("ICE CANDIDATE:");
         console.log(btoa(JSON.stringify(ev.candidate)));
         alert('Copy ICE Candidate from console');
-        setTimeout(function () {
-            var otherCanddiateBlob = prompt("Paste other's ICE candidate");
-            if (otherCanddiateBlob) {
-                localConnection.addIceCandidate(JSON.parse(atob(otherCanddiateBlob)));
-            }
-        }, 1000);
+        setTimeout(function () { return __awaiter(_this, void 0, void 0, function () {
+            var otherCanddiateBlob;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        otherCanddiateBlob = prompt("Paste other's ICE candidate");
+                        if (!otherCanddiateBlob) return [3 /*break*/, 2];
+                        return [4 /*yield*/, localConnection.addIceCandidate(JSON.parse(atob(otherCanddiateBlob)))];
+                    case 1:
+                        _a.sent();
+                        console.log("Added Ice Candidate");
+                        _a.label = 2;
+                    case 2: return [2 /*return*/];
+                }
+            });
+        }); }, 1000);
     };
     // remoteConnection.onicecandidate = e => !e.candidate
     //     || localConnection.addIceCandidate(e.candidate);
@@ -104,6 +115,7 @@ function localShit(localConnection) {
                     return [4 /*yield*/, localConnection.setRemoteDescription(JSON.parse(atob(answerBlob)))];
                 case 3:
                     _a.sent();
+                    console.log("Added Remote Description");
                     return [2 /*return*/];
             }
         });

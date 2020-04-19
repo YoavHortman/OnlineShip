@@ -44,10 +44,11 @@ function main1() {
         console.log("ICE CANDIDATE:");
         console.log(btoa(JSON.stringify(ev.candidate)));
         alert('Copy ICE Candidate from console');
-        setTimeout(() => {
+        setTimeout(async () => {
             const otherCanddiateBlob = prompt("Paste other's ICE candidate");
             if (otherCanddiateBlob) {
-                localConnection.addIceCandidate(JSON.parse(atob(otherCanddiateBlob)));
+                await localConnection.addIceCandidate(JSON.parse(atob(otherCanddiateBlob)));
+                console.log("Added Ice Candidate");
             }
         }, 1000);
     }
@@ -75,6 +76,8 @@ async function localShit(localConnection: RTCPeerConnection) {
     const answerBlob = prompt("Paste Answer:");
 
     await localConnection.setRemoteDescription(JSON.parse(atob(answerBlob)));
+
+    console.log("Added Remote Description");
 }
 
 main1();
