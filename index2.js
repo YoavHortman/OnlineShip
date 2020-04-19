@@ -36,7 +36,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 export var x = 1;
 var config = {
-    iceServers: [{ urls: "stun:stun.sparvoip.de" }]
+    iceServers: [{ urls: "stun:stun.stunprotocol.org:3478" }]
 };
 function main2() {
     var _this = this;
