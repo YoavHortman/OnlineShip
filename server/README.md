@@ -8,4 +8,9 @@
 # make
 
 # ./stunserver --help
-# ./stunserver
+# ./stunserver --verbosity 3
+
+
+
+# apt install -y libevent-dev
+# git clone https://github.com/coturn/coturn.git

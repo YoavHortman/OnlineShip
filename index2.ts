@@ -1,7 +1,7 @@
 export const x = 1;
 
 const config: RTCConfiguration = {
-    iceServers: [{ urls: "stun:104.248.254.243" }]
+    iceServers: [{ urls: "stun:stun.stunprotocol.org" }]
 };
 
 function main2() {

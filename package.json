@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "http-server": "^0.12.1",
+    "peerjs": "1.2.0",
     "typescript": "^3.8.3"
   }
 }
