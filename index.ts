@@ -31,25 +31,29 @@ function hostServer(idCallback: (id: string) => void): void {
 
         connection.on("open", () => {
             console.log("open event");
+            startGame({
+                type: "Host",
+                clients: [connection]
+            });
         });
 
-        let pingSent: Date = new Date();
+        // let pingSent: Date = new Date();
 
-        connection.on("data", (data) => {
-            const pingMillis = new Date().getTime() - pingSent.getTime()
-            console.log("ping time:", pingMillis);
+        // connection.on("data", (data) => {
+        //     const pingMillis = new Date().getTime() - pingSent.getTime()
+        //     console.log("ping time:", pingMillis);
 
-            console.log("data", data);
-            setTimeout(() => {
-                pingSent = new Date();
-                connection.send({ ping: 5 });
-            }, 100);
-        });
+        //     console.log("data", data);
+        //     setTimeout(() => {
+        //         pingSent = new Date();
+        //         connection.send({ ping: 5 });
+        //     }, 100);
+        // });
 
-        setTimeout(() => {
-            console.log("sending");
-            connection.send({ hello: "world" });
-        }, 3000);
+        // setTimeout(() => {
+        //     console.log("sending");
+        //     connection.send({ hello: "world" });
+        // }, 3000);
     });
 }
 
@@ -68,13 +72,12 @@ function connectToServer(id: string): void {
     peer.on("connection", (conn) => {
         console.log("connection", conn);
 
-        conn.on("data", (data: any) => {
-            console.log("data", data);
-            conn.send({ "reply": "hello" });
-        });
-
         conn.on("open", () => {
             console.log("open");
+            startGame({
+                type: "Client",
+                server: conn
+            });
         });
     });
 }
@@ -86,7 +89,29 @@ class Controller {
     rightKey: boolean = false;
 }
 
-function startGame() {
+type NetworkConnection = NetworkConnection.Host | NetworkConnection.Client;
+
+namespace NetworkConnection {
+    export interface Host {
+        type: "Host";
+        clients: Peer.DataConnection[];
+    }
+
+    export interface Client {
+        type: "Client";
+        server: Peer.DataConnection;
+    }
+}
+
+// Packet from the client to the host
+interface ClientPacket {
+    x: number;
+    y: number;
+    velx: number;
+    vely: number;
+}
+
+function startGame(networkConnection: NetworkConnection) {
     const world = new World();
     const canvas = document.createElement("canvas");
     canvas.width = 500;
@@ -129,14 +154,70 @@ function startGame() {
         }
     });
 
+    const NETWORK_PACKET_TIME = 100;
+
+    let lastNetworkPacketSent = 0;
+
     const frame = (time: number) => {
         console.log("frame", time);
         world.step(controller);
+
+        if (time - lastNetworkPacketSent >= NETWORK_PACKET_TIME) {
+            // Send packet
+
+            switch (networkConnection.type) {
+                case "Host":
+                    {
+                        // TODO send to everyone
+                    }
+                    break;
+                case "Client":
+                    {
+                        const ship = world.getPlayerShip();
+                        const packet: ClientPacket = {
+                            x: ship.x,
+                            y: ship.y,
+                            velx: ship.velx,
+                            vely: ship.vely
+                        };
+                        networkConnection.server.send(packet);
+                    }
+                    break;
+            }
+
+            lastNetworkPacketSent = time;
+        }
+
         world.render(ctx);
         requestAnimationFrame(frame);
     };
 
     requestAnimationFrame(frame);
+
+
+    switch (networkConnection.type) {
+        case "Host":
+            {
+                for (const client of networkConnection.clients) {
+                    client.on("data", (data) => {
+                        const packet: ClientPacket = data;
+
+                        // Hacky
+                        const ship = world.getOtherShip();
+                        ship.x = packet.x;
+                        ship.y = packet.y;
+                        ship.velx = packet.velx;
+                        ship.vely = packet.vely;
+                    });
+                }
+            }
+            break;
+        case "Client":
+            {
+                // TODO (client gets update from host)
+            }
+            break;
+    }
 }
 
 const GAME_WIDTH: number = 500;
@@ -198,10 +279,27 @@ class Ship {
 }
 
 class World {
-    public ships: Ship[] = [new Ship()];
+    public ships: Ship[] = [new Ship(), new Ship()];
 
     public constructor() {
         this.ships[0].playerControlled = true;
+    }
+
+    public getPlayerShip(): Ship {
+        for (const ship of this.ships) {
+            if (ship.playerControlled) {
+                return ship;
+            }
+        }
+    }
+
+    // Really hacky and bad
+    public getOtherShip(): Ship {
+        for (const ship of this.ships) {
+            if (!ship.playerControlled) {
+                return ship;
+            }
+        }
     }
 
     public step(controller: Controller) {
@@ -236,5 +334,3 @@ window.connectToServer = connectToServer;
 // }
 
 // main2();
-
-startGame();

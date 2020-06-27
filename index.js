@@ -25,21 +25,25 @@ function hostServer(idCallback) {
         console.log("connection:", connection);
         connection.on("open", function () {
             console.log("open event");
+            startGame({
+                type: "Host",
+                clients: [connection]
+            });
         });
-        var pingSent = new Date();
-        connection.on("data", function (data) {
-            var pingMillis = new Date().getTime() - pingSent.getTime();
-            console.log("ping time:", pingMillis);
-            console.log("data", data);
-            setTimeout(function () {
-                pingSent = new Date();
-                connection.send({ ping: 5 });
-            }, 100);
-        });
-        setTimeout(function () {
-            console.log("sending");
-            connection.send({ hello: "world" });
-        }, 3000);
+        // let pingSent: Date = new Date();
+        // connection.on("data", (data) => {
+        //     const pingMillis = new Date().getTime() - pingSent.getTime()
+        //     console.log("ping time:", pingMillis);
+        //     console.log("data", data);
+        //     setTimeout(() => {
+        //         pingSent = new Date();
+        //         connection.send({ ping: 5 });
+        //     }, 100);
+        // });
+        // setTimeout(() => {
+        //     console.log("sending");
+        //     connection.send({ hello: "world" });
+        // }, 3000);
     });
 }
 // Main function for client
@@ -55,12 +59,12 @@ function connectToServer(id) {
     });
     peer.on("connection", function (conn) {
         console.log("connection", conn);
-        conn.on("data", function (data) {
-            console.log("data", data);
-            conn.send({ "reply": "hello" });
-        });
         conn.on("open", function () {
             console.log("open");
+            startGame({
+                type: "Client",
+                server: conn
+            });
         });
     });
 }
@@ -73,7 +77,7 @@ var Controller = /** @class */ (function () {
     }
     return Controller;
 }());
-function startGame() {
+function startGame(networkConnection) {
     var world = new World();
     var canvas = document.createElement("canvas");
     canvas.width = 500;
@@ -113,13 +117,61 @@ function startGame() {
                 break;
         }
     });
+    var NETWORK_PACKET_TIME = 100;
+    var lastNetworkPacketSent = 0;
     var frame = function (time) {
         console.log("frame", time);
         world.step(controller);
+        if (time - lastNetworkPacketSent >= NETWORK_PACKET_TIME) {
+            // Send packet
+            switch (networkConnection.type) {
+                case "Host":
+                    {
+                        // TODO send to everyone
+                    }
+                    break;
+                case "Client":
+                    {
+                        var ship = world.getPlayerShip();
+                        var packet = {
+                            x: ship.x,
+                            y: ship.y,
+                            velx: ship.velx,
+                            vely: ship.vely
+                        };
+                        networkConnection.server.send(packet);
+                    }
+                    break;
+            }
+            lastNetworkPacketSent = time;
+        }
         world.render(ctx);
         requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
+    switch (networkConnection.type) {
+        case "Host":
+            {
+                for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
+                    var client = _a[_i];
+                    client.on("data", function (data) {
+                        var packet = data;
+                        // Hacky
+                        var ship = world.getOtherShip();
+                        ship.x = packet.x;
+                        ship.y = packet.y;
+                        ship.velx = packet.velx;
+                        ship.vely = packet.vely;
+                    });
+                }
+            }
+            break;
+        case "Client":
+            {
+                // TODO (client gets update from host)
+            }
+            break;
+    }
 }
 var GAME_WIDTH = 500;
 var GAME_HEIGHT = 500;
@@ -174,9 +226,26 @@ var Ship = /** @class */ (function () {
 }());
 var World = /** @class */ (function () {
     function World() {
-        this.ships = [new Ship()];
+        this.ships = [new Ship(), new Ship()];
         this.ships[0].playerControlled = true;
     }
+    World.prototype.getPlayerShip = function () {
+        for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
+            var ship = _a[_i];
+            if (ship.playerControlled) {
+                return ship;
+            }
+        }
+    };
+    // Really hacky and bad
+    World.prototype.getOtherShip = function () {
+        for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
+            var ship = _a[_i];
+            if (!ship.playerControlled) {
+                return ship;
+            }
+        }
+    };
     World.prototype.step = function (controller) {
         console.log(controller);
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
@@ -209,5 +278,4 @@ window.connectToServer = connectToServer;
 //     console.log("main2");
 // }
 // main2();
-startGame();
 //# sourceMappingURL=index.js.map
