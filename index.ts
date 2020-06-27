@@ -79,6 +79,151 @@ function connectToServer(id: string): void {
     });
 }
 
+class Controller {
+    upKey: boolean = false;
+    downKey: boolean = false;
+    leftKey: boolean = false;
+    rightKey: boolean = false;
+}
+
+function startGame() {
+    const world = new World();
+    const canvas = document.createElement("canvas");
+    canvas.width = 500;
+    canvas.height = 500;
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext("2d");
+
+    const controller = new Controller();
+
+    document.addEventListener("keydown", (e) => {
+        switch (e.keyCode) {
+            case 38: // Up
+                controller.upKey = true;
+                break;
+            case 40: // Down
+                controller.downKey = true;
+                break;
+            case 37: // Left
+                controller.leftKey = true;
+                break;
+            case 39: // Right
+                controller.rightKey = true;
+                break;
+        }
+    });
+    document.addEventListener("keyup", (e) => {
+        switch (e.keyCode) {
+            case 38: // Up
+                controller.upKey = false;
+                break;
+            case 40: // Down
+                controller.downKey = false;
+                break;
+            case 37: // Left
+                controller.leftKey = false;
+                break;
+            case 39: // Right
+                controller.rightKey = false;
+                break;
+        }
+    });
+
+    const frame = (time: number) => {
+        console.log("frame", time);
+        world.step(controller);
+        world.render(ctx);
+        requestAnimationFrame(frame);
+    };
+
+    requestAnimationFrame(frame);
+}
+
+const GAME_WIDTH: number = 500;
+const GAME_HEIGHT: number = 500;
+
+class Ship {
+    public playerControlled: boolean;
+
+    public radius: number = 30;
+
+    public x: number = 30;
+    public y: number = 30;
+    public velx: number = 0;
+    public vely: number = 0;
+
+    public step(controller: Controller) {
+        if (controller.rightKey) {
+            this.velx += 0.2;
+        }
+        if (controller.leftKey) {
+            this.velx -= 0.2;
+        }
+        if (controller.upKey) {
+            this.vely -= 0.2;
+        }
+        if (controller.downKey) {
+            this.vely += 0.2;
+        }
+
+        this.velx *= 0.98;
+        this.vely *= 0.98;
+
+        this.x += this.velx;
+        this.y += this.vely;
+
+        if (this.x > GAME_WIDTH - this.radius && this.velx > 0) {
+            this.velx *= -1;
+            this.x = GAME_WIDTH - this.radius;
+        }
+        if (this.y > GAME_HEIGHT - this.radius && this.vely > 0) {
+            this.vely *= -1;
+            this.y = GAME_HEIGHT - this.radius;
+        }
+        if (this.x < this.radius && this.velx < 0) {
+            this.velx *= -1;
+            this.x = this.radius;
+        }
+        if (this.y < this.radius && this.vely < 0) {
+            this.vely *= -1;
+            this.y = this.radius;
+        }
+    }
+
+    public render(ctx: CanvasRenderingContext2D) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 30, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+}
+
+class World {
+    public ships: Ship[] = [new Ship()];
+
+    public constructor() {
+        this.ships[0].playerControlled = true;
+    }
+
+    public step(controller: Controller) {
+        console.log(controller);
+        for (const ship of this.ships) {
+            if (ship.playerControlled) {
+                ship.step(controller);
+            } else {
+                ship.step(new Controller());
+            }
+        }
+    }
+
+    public render(ctx: CanvasRenderingContext2D) {
+        ctx.fillStyle = "#cccccc";
+        ctx.fillRect(0, 0, 500, 500);
+        for (const ship of this.ships) {
+            ship.render(ctx);
+        }
+    }
+}
+
 window.hostServer = hostServer;
 window.connectToServer = connectToServer;
 
@@ -91,3 +236,5 @@ window.connectToServer = connectToServer;
 // }
 
 // main2();
+
+startGame();
