@@ -22,9 +22,11 @@ function hostServer(idCallback: (id: string) => void): void {
   peer.on("open", (id: string) => {
     console.log("server id", id);
     idCallback(id);
-
-    const clientId = prompt("Enter client id");
-    console.log("clientId", clientId);
+    let clientId = null
+    while (clientId === null) {
+      clientId = prompt(`Copy selected text\nEnter client id`, id);
+      console.log("clientId", clientId);
+    }
 
     const connection = peer.connect(clientId, WEBRTC_OPTIONS);
     console.log("connection:", connection);
@@ -67,6 +69,7 @@ function connectToServer(id: string): void {
   peer.connect(id, WEBRTC_OPTIONS);
   peer.on("open", (id: string) => {
     console.log("open", id);
+    prompt('give to server:', id)
   });
 
   peer.on("connection", (conn) => {
@@ -182,16 +185,16 @@ function startGame(networkConnection: NetworkConnection) {
           }
           break;
         case "Client": {
-            const ship = world.getPlayerShip();
-            const packet: ClientPacket = {
-              x: ship.x,
-              y: ship.y,
-              velx: ship.velx,
-              vely: ship.vely
-            };
-            networkConnection.server.send(packet);
-            break;
-          }
+          const ship = world.getPlayerShip();
+          const packet: ClientPacket = {
+            x: ship.x,
+            y: ship.y,
+            velx: ship.velx,
+            vely: ship.vely
+          };
+          networkConnection.server.send(packet);
+          break;
+        }
       }
 
       lastNetworkPacketSent = time;

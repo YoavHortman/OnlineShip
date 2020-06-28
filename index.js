@@ -19,8 +19,11 @@ function hostServer(idCallback) {
     peer.on("open", function (id) {
         console.log("server id", id);
         idCallback(id);
-        var clientId = prompt("Enter client id");
-        console.log("clientId", clientId);
+        var clientId = null;
+        while (clientId === null) {
+            clientId = prompt("Copy selected text\nEnter client id", id);
+            console.log("clientId", clientId);
+        }
         var connection = peer.connect(clientId, WEBRTC_OPTIONS);
         console.log("connection:", connection);
         connection.on("open", function () {
@@ -56,6 +59,7 @@ function connectToServer(id) {
     peer.connect(id, WEBRTC_OPTIONS);
     peer.on("open", function (id) {
         console.log("open", id);
+        prompt('give to server:', id);
     });
     peer.on("connection", function (conn) {
         console.log("connection", conn);

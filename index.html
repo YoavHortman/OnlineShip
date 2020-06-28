@@ -2,12 +2,19 @@
 <html>
 
 <head>
+  <script src="https://unpkg.com/peerjs@1.2.0/dist/peerjs.min.js"></script>
+  <script type="module" src="index.js"></script>
 </head>
 
-<body>
 
-    <script src="https://unpkg.com/peerjs@1.2.0/dist/peerjs.min.js"></script>
-    <script type="module" src="index.js"></script>
+<body>
+  <div>
+    <button onclick="hostServer(() => {})">Host server</button>
+  </div>
+  <div>
+    <input id='SERVER_ID' type='text' placeholder="Server id"/>
+    <button onclick="connectToServer(document.getElementById('SERVER_ID').textContent)">Join server</button>
+  </div>
 </body>
 
 </html>
