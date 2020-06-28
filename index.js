@@ -120,17 +120,12 @@ function startGame(networkConnection) {
     var NETWORK_PACKET_TIME = 100;
     var lastNetworkPacketSent = 0;
     var frame = function (time) {
-        console.log("frame", time);
+        // console.log("frame", time);
         world.step(controller);
         if (time - lastNetworkPacketSent >= NETWORK_PACKET_TIME) {
             // Send packet
             switch (networkConnection.type) {
                 case "Host":
-                    {
-                        // TODO send to everyone
-                    }
-                    break;
-                case "Client":
                     {
                         var ship = world.getPlayerShip();
                         var packet = {
@@ -139,9 +134,24 @@ function startGame(networkConnection) {
                             velx: ship.velx,
                             vely: ship.vely
                         };
-                        networkConnection.server.send(packet);
+                        for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
+                            var client = _a[_i];
+                            client.send(packet);
+                        }
+                        // TODO send to everyone
                     }
                     break;
+                case "Client": {
+                    var ship = world.getPlayerShip();
+                    var packet = {
+                        x: ship.x,
+                        y: ship.y,
+                        velx: ship.velx,
+                        vely: ship.vely
+                    };
+                    networkConnection.server.send(packet);
+                    break;
+                }
             }
             lastNetworkPacketSent = time;
         }
@@ -150,26 +160,35 @@ function startGame(networkConnection) {
     };
     requestAnimationFrame(frame);
     switch (networkConnection.type) {
-        case "Host":
-            {
-                for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
-                    var client = _a[_i];
-                    client.on("data", function (data) {
-                        var packet = data;
-                        // Hacky
-                        var ship = world.getOtherShip();
-                        ship.x = packet.x;
-                        ship.y = packet.y;
-                        ship.velx = packet.velx;
-                        ship.vely = packet.vely;
-                    });
-                }
+        case "Host": {
+            for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
+                var client = _a[_i];
+                client.on("data", function (data) {
+                    var packet = data;
+                    // Hacky
+                    var ship = world.getOtherShip();
+                    ship.x = packet.x;
+                    ship.y = packet.y;
+                    ship.velx = packet.velx;
+                    ship.vely = packet.vely;
+                });
             }
             break;
+        }
         case "Client":
             {
-                // TODO (client gets update from host)
+                networkConnection.server.on("data", function (data) {
+                    var packet = data;
+                    console.log('server data', data);
+                    // Hacky
+                    var ship = world.getOtherShip();
+                    ship.x = packet.x;
+                    ship.y = packet.y;
+                    ship.velx = packet.velx;
+                    ship.vely = packet.vely;
+                });
             }
+            // TODO (client gets update from host)
             break;
     }
 }
@@ -247,7 +266,6 @@ var World = /** @class */ (function () {
         }
     };
     World.prototype.step = function (controller) {
-        console.log(controller);
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
             var ship = _a[_i];
             if (ship.playerControlled) {
