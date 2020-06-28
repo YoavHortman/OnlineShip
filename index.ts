@@ -2,15 +2,6 @@ const WEBRTC_OPTIONS: Peer.PeerConnectOption = {
   serialization: "json"
 };
 
-function connect(peer: Peer): void {
-  var conn = peer.connect('another-peers-id');
-  // on open will be launch when you successfully connect to PeerServer
-  conn.on('open', function () {
-    // here you have conn.id
-    conn.send('hi!');
-  });
-}
-
 // Main function for server host
 function hostServer(idCallback: (id: string) => void): void {
   console.log("SERVER");
