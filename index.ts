@@ -99,14 +99,19 @@ namespace NetworkConnection {
 
 // Packet from the client to the host
 interface ClientPacket {
+  shipId: number;
   x: number;
   y: number;
   velx: number;
   vely: number;
 }
 
+// interface ClientPacket {
+//   data: ShipStatus[];
+// }
+
 function startGame(networkConnection: NetworkConnection) {
-  const world = new World();
+  const world = new World(networkConnection.type === "Host" ? 0 : 1);
   const canvas = document.createElement("canvas");
   canvas.width = 500;
   canvas.height = 500;
@@ -164,13 +169,20 @@ function startGame(networkConnection: NetworkConnection) {
           {
             const ship = world.getPlayerShip();
             const packet: ClientPacket = {
+              shipId: ship.id,
               x: ship.x,
               y: ship.y,
               velx: ship.velx,
-              vely: ship.vely
+              vely: ship.vely,
             };
+
             for (const client of networkConnection.clients) {
-              client.send(packet)
+              // packet.data.push({
+              //   x: client.
+              // })
+            }
+            for (const client of networkConnection.clients) {
+              client.send(packet);
             }
             // TODO send to everyone
           }
@@ -178,6 +190,7 @@ function startGame(networkConnection: NetworkConnection) {
         case "Client": {
           const ship = world.getPlayerShip();
           const packet: ClientPacket = {
+            shipId: ship.id,
             x: ship.x,
             y: ship.y,
             velx: ship.velx,
@@ -204,8 +217,7 @@ function startGame(networkConnection: NetworkConnection) {
         client.on("data", (data) => {
           const packet: ClientPacket = data;
 
-          // Hacky
-          const ship = world.getOtherShip();
+          const ship = world.getShipById(packet.shipId);
           ship.x = packet.x;
           ship.y = packet.y;
           ship.velx = packet.velx;
@@ -219,7 +231,7 @@ function startGame(networkConnection: NetworkConnection) {
         const packet: ClientPacket = data;
         console.log('server data', data)
         // Hacky
-        const ship = world.getOtherShip();
+        const ship = world.getShipById(packet.shipId);
         ship.x = packet.x;
         ship.y = packet.y;
         ship.velx = packet.velx;
@@ -235,6 +247,7 @@ const GAME_WIDTH: number = 500;
 const GAME_HEIGHT: number = 500;
 
 class Ship {
+  id: number;
   public playerControlled: boolean;
 
   public radius: number = 30;
@@ -243,6 +256,10 @@ class Ship {
   public y: number = 30;
   public velx: number = 0;
   public vely: number = 0;
+
+  constructor(id: number) {
+    this.id = id;
+  }
 
   public step(controller: Controller) {
     if (controller.rightKey) {
@@ -290,24 +307,23 @@ class Ship {
 }
 
 class World {
-  public ships: Ship[] = [new Ship(), new Ship()];
+  public ships: readonly Ship[] = [new Ship(0), new Ship(1)];
 
-  public constructor() {
-    this.ships[0].playerControlled = true;
+  public constructor(myShipId: number) {
+    this.getShipById(myShipId).playerControlled = true;
   }
 
-  public getPlayerShip(): Ship {
+  public getShipById(id: number): Ship {
     for (const ship of this.ships) {
-      if (ship.playerControlled) {
+      if (ship.id === id) {
         return ship;
       }
     }
   }
 
-  // Really hacky and bad
-  public getOtherShip(): Ship {
+  public getPlayerShip(): Ship {
     for (const ship of this.ships) {
-      if (!ship.playerControlled) {
+      if (ship.playerControlled) {
         return ship;
       }
     }

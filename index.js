@@ -1,14 +1,6 @@
 var WEBRTC_OPTIONS = {
     serialization: "json"
 };
-function connect(peer) {
-    var conn = peer.connect('another-peers-id');
-    // on open will be launch when you successfully connect to PeerServer
-    conn.on('open', function () {
-        // here you have conn.id
-        conn.send('hi!');
-    });
-}
 // Main function for server host
 function hostServer(idCallback) {
     console.log("SERVER");
@@ -81,8 +73,11 @@ var Controller = /** @class */ (function () {
     }
     return Controller;
 }());
+// interface ClientPacket {
+//   data: ShipStatus[];
+// }
 function startGame(networkConnection) {
-    var world = new World();
+    var world = new World(networkConnection.type === "Host" ? 0 : 1);
     var canvas = document.createElement("canvas");
     canvas.width = 500;
     canvas.height = 500;
@@ -133,6 +128,7 @@ function startGame(networkConnection) {
                     {
                         var ship = world.getPlayerShip();
                         var packet = {
+                            shipId: ship.id,
                             x: ship.x,
                             y: ship.y,
                             velx: ship.velx,
@@ -140,6 +136,12 @@ function startGame(networkConnection) {
                         };
                         for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
                             var client = _a[_i];
+                            // packet.data.push({
+                            //   x: client.
+                            // })
+                        }
+                        for (var _b = 0, _c = networkConnection.clients; _b < _c.length; _b++) {
+                            var client = _c[_b];
                             client.send(packet);
                         }
                         // TODO send to everyone
@@ -148,6 +150,7 @@ function startGame(networkConnection) {
                 case "Client": {
                     var ship = world.getPlayerShip();
                     var packet = {
+                        shipId: ship.id,
                         x: ship.x,
                         y: ship.y,
                         velx: ship.velx,
@@ -169,8 +172,7 @@ function startGame(networkConnection) {
                 var client = _a[_i];
                 client.on("data", function (data) {
                     var packet = data;
-                    // Hacky
-                    var ship = world.getOtherShip();
+                    var ship = world.getShipById(packet.shipId);
                     ship.x = packet.x;
                     ship.y = packet.y;
                     ship.velx = packet.velx;
@@ -185,7 +187,7 @@ function startGame(networkConnection) {
                     var packet = data;
                     console.log('server data', data);
                     // Hacky
-                    var ship = world.getOtherShip();
+                    var ship = world.getShipById(packet.shipId);
                     ship.x = packet.x;
                     ship.y = packet.y;
                     ship.velx = packet.velx;
@@ -199,12 +201,13 @@ function startGame(networkConnection) {
 var GAME_WIDTH = 500;
 var GAME_HEIGHT = 500;
 var Ship = /** @class */ (function () {
-    function Ship() {
+    function Ship(id) {
         this.radius = 30;
         this.x = 30;
         this.y = 30;
         this.velx = 0;
         this.vely = 0;
+        this.id = id;
     }
     Ship.prototype.step = function (controller) {
         if (controller.rightKey) {
@@ -248,23 +251,22 @@ var Ship = /** @class */ (function () {
     return Ship;
 }());
 var World = /** @class */ (function () {
-    function World() {
-        this.ships = [new Ship(), new Ship()];
-        this.ships[0].playerControlled = true;
+    function World(myShipId) {
+        this.ships = [new Ship(0), new Ship(1)];
+        this.getShipById(myShipId).playerControlled = true;
     }
-    World.prototype.getPlayerShip = function () {
+    World.prototype.getShipById = function (id) {
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
             var ship = _a[_i];
-            if (ship.playerControlled) {
+            if (ship.id === id) {
                 return ship;
             }
         }
     };
-    // Really hacky and bad
-    World.prototype.getOtherShip = function () {
+    World.prototype.getPlayerShip = function () {
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
             var ship = _a[_i];
-            if (!ship.playerControlled) {
+            if (ship.playerControlled) {
                 return ship;
             }
         }
