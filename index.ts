@@ -346,6 +346,21 @@ class Ship {
 const VectorLength = (x: number, y: number) => {
   return Math.sqrt(x * x + y * y);
 }
+const dotProduct = (x1: number, y1: number, x2: number, y2: number) => {
+  return x1 * x2 + y1 * y2;
+}
+
+/**
+ * normal must be normalized
+ */
+const elasticCollision = (normalX: number, normalY: number, velX: number, velY: number): [number, number] => {
+  const dot = dotProduct(normalX, normalY, velX, velY);
+  const projX = dot * normalX;
+  const projY = dot * normalY;
+
+  return [velX - 2 * projX, velY - 2 * projY];
+}
+
 class World {
   public ships: readonly Ship[] = [new Ship(0), new Ship(1)];
 
@@ -377,10 +392,6 @@ class World {
           const deltaY = ship1.y - ship2.y;
           const deltaLen = VectorLength(deltaX, deltaY);
           if (deltaLen < ship1.radius + ship2.radius) {
-            ship1.velx *= -1;
-            ship1.vely *= -1;
-            ship2.velx *= -1;
-            ship2.vely *= -1;
             const push = ship1.radius + ship2.radius - deltaLen;
             const pushX = deltaX / deltaLen * push;
             const pushY = deltaY / deltaLen * push;
@@ -388,6 +399,16 @@ class World {
             ship2.y -= pushY / 2;
             ship1.x += pushX / 2;
             ship1.y += pushY / 2;
+
+            const normalX = deltaX / deltaLen;
+            const normalY = deltaY / deltaLen;
+
+            const [ship1velx, ship1vely] = elasticCollision(normalX, normalY, ship1.velx, ship1.vely);
+            ship1.velx = ship1velx;
+            ship1.vely = ship1vely;
+            const [ship2velx, ship2vely] = elasticCollision(normalX, normalY, ship2.velx, ship2.vely);
+            ship2.velx = ship2velx;
+            ship2.vely = ship2vely;
           }
         }
       }

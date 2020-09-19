@@ -276,6 +276,18 @@ var Ship = /** @class */ (function () {
 var VectorLength = function (x, y) {
     return Math.sqrt(x * x + y * y);
 };
+var dotProduct = function (x1, y1, x2, y2) {
+    return x1 * x2 + y1 * y2;
+};
+/**
+ * normal must be normalized
+ */
+var elasticCollision = function (normalX, normalY, velX, velY) {
+    var dot = dotProduct(normalX, normalY, velX, velY);
+    var projX = dot * normalX;
+    var projY = dot * normalY;
+    return [velX - 2 * projX, velY - 2 * projY];
+};
 var World = /** @class */ (function () {
     function World() {
         this.ships = [new Ship(0), new Ship(1)];
@@ -308,10 +320,6 @@ var World = /** @class */ (function () {
                     var deltaY = ship1.y - ship2.y;
                     var deltaLen = VectorLength(deltaX, deltaY);
                     if (deltaLen < ship1.radius + ship2.radius) {
-                        ship1.velx *= -1;
-                        ship1.vely *= -1;
-                        ship2.velx *= -1;
-                        ship2.vely *= -1;
                         var push = ship1.radius + ship2.radius - deltaLen;
                         var pushX = deltaX / deltaLen * push;
                         var pushY = deltaY / deltaLen * push;
@@ -319,6 +327,14 @@ var World = /** @class */ (function () {
                         ship2.y -= pushY / 2;
                         ship1.x += pushX / 2;
                         ship1.y += pushY / 2;
+                        var normalX = deltaX / deltaLen;
+                        var normalY = deltaY / deltaLen;
+                        var _f = elasticCollision(normalX, normalY, ship1.velx, ship1.vely), ship1velx = _f[0], ship1vely = _f[1];
+                        ship1.velx = ship1velx;
+                        ship1.vely = ship1vely;
+                        var _g = elasticCollision(normalX, normalY, ship2.velx, ship2.vely), ship2velx = _g[0], ship2vely = _g[1];
+                        ship2.velx = ship2velx;
+                        ship2.vely = ship2vely;
                     }
                 }
             }
