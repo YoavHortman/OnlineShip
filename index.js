@@ -73,9 +73,6 @@ var Controller = /** @class */ (function () {
     }
     return Controller;
 }());
-// interface ClientPacket {
-//   data: ShipStatus[];
-// }
 function startGame(networkConnection) {
     var world = new World(networkConnection.type === "Host" ? 0 : 1);
     var canvas = document.createElement("canvas");
@@ -126,35 +123,33 @@ function startGame(networkConnection) {
             switch (networkConnection.type) {
                 case "Host":
                     {
-                        var ship = world.getPlayerShip();
                         var packet = {
-                            shipId: ship.id,
-                            x: ship.x,
-                            y: ship.y,
-                            velx: ship.velx,
-                            vely: ship.vely
+                            ships: world.ships.map(function (ship) {
+                                return {
+                                    shipId: ship.id,
+                                    x: ship.x,
+                                    y: ship.y,
+                                    velx: ship.velx,
+                                    vely: ship.vely
+                                };
+                            })
                         };
                         for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
                             var client = _a[_i];
-                            // packet.data.push({
-                            //   x: client.
-                            // })
-                        }
-                        for (var _b = 0, _c = networkConnection.clients; _b < _c.length; _b++) {
-                            var client = _c[_b];
                             client.send(packet);
                         }
-                        // TODO send to everyone
                     }
                     break;
                 case "Client": {
                     var ship = world.getPlayerShip();
                     var packet = {
-                        shipId: ship.id,
-                        x: ship.x,
-                        y: ship.y,
-                        velx: ship.velx,
-                        vely: ship.vely
+                        ship: {
+                            shipId: ship.id,
+                            x: ship.x,
+                            y: ship.y,
+                            velx: ship.velx,
+                            vely: ship.vely
+                        }
                     };
                     networkConnection.server.send(packet);
                     break;
@@ -172,11 +167,11 @@ function startGame(networkConnection) {
                 var client = _a[_i];
                 client.on("data", function (data) {
                     var packet = data;
-                    var ship = world.getShipById(packet.shipId);
-                    ship.x = packet.x;
-                    ship.y = packet.y;
-                    ship.velx = packet.velx;
-                    ship.vely = packet.vely;
+                    var ship = world.getShipById(packet.ship.shipId);
+                    ship.x = packet.ship.x;
+                    ship.y = packet.ship.y;
+                    ship.velx = packet.ship.velx;
+                    ship.vely = packet.ship.vely;
                 });
             }
             break;
@@ -186,12 +181,14 @@ function startGame(networkConnection) {
                 networkConnection.server.on("data", function (data) {
                     var packet = data;
                     console.log('server data', data);
-                    // Hacky
-                    var ship = world.getShipById(packet.shipId);
-                    ship.x = packet.x;
-                    ship.y = packet.y;
-                    ship.velx = packet.velx;
-                    ship.vely = packet.vely;
+                    for (var _i = 0, _a = packet.ships; _i < _a.length; _i++) {
+                        var shipPacket = _a[_i];
+                        var ship = world.getShipById(shipPacket.shipId);
+                        ship.x = shipPacket.x;
+                        ship.y = shipPacket.y;
+                        ship.velx = shipPacket.velx;
+                        ship.vely = shipPacket.vely;
+                    }
                 });
             }
             // TODO (client gets update from host)

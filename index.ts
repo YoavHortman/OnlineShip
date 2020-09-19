@@ -98,7 +98,7 @@ namespace NetworkConnection {
 }
 
 // Packet from the client to the host
-interface ClientPacket {
+interface ShipStatus {
   shipId: number;
   x: number;
   y: number;
@@ -106,9 +106,13 @@ interface ClientPacket {
   vely: number;
 }
 
-// interface ClientPacket {
-//   data: ShipStatus[];
-// }
+interface HostToClient {
+  ships: ShipStatus[];
+}
+
+interface ClientToHost {
+  ship: ShipStatus;
+}
 
 function startGame(networkConnection: NetworkConnection) {
   const world = new World(networkConnection.type === "Host" ? 0 : 1);
@@ -167,34 +171,34 @@ function startGame(networkConnection: NetworkConnection) {
       switch (networkConnection.type) {
         case "Host":
           {
-            const ship = world.getPlayerShip();
-            const packet: ClientPacket = {
-              shipId: ship.id,
-              x: ship.x,
-              y: ship.y,
-              velx: ship.velx,
-              vely: ship.vely,
+
+            const packet: HostToClient = {
+              ships: world.ships.map((ship) => {
+                return {
+                  shipId: ship.id,
+                  x: ship.x,
+                  y: ship.y,
+                  velx: ship.velx,
+                  vely: ship.vely,
+                }
+              })
             };
 
             for (const client of networkConnection.clients) {
-              // packet.data.push({
-              //   x: client.
-              // })
-            }
-            for (const client of networkConnection.clients) {
               client.send(packet);
             }
-            // TODO send to everyone
           }
           break;
         case "Client": {
           const ship = world.getPlayerShip();
-          const packet: ClientPacket = {
-            shipId: ship.id,
-            x: ship.x,
-            y: ship.y,
-            velx: ship.velx,
-            vely: ship.vely
+          const packet: ClientToHost = {
+            ship: {
+              shipId: ship.id,
+              x: ship.x,
+              y: ship.y,
+              velx: ship.velx,
+              vely: ship.vely
+            }
           };
           networkConnection.server.send(packet);
           break;
@@ -215,27 +219,27 @@ function startGame(networkConnection: NetworkConnection) {
     case "Host": {
       for (const client of networkConnection.clients) {
         client.on("data", (data) => {
-          const packet: ClientPacket = data;
-
-          const ship = world.getShipById(packet.shipId);
-          ship.x = packet.x;
-          ship.y = packet.y;
-          ship.velx = packet.velx;
-          ship.vely = packet.vely;
+          const packet: ClientToHost = data;
+          const ship = world.getShipById(packet.ship.shipId);
+          ship.x = packet.ship.x;
+          ship.y = packet.ship.y;
+          ship.velx = packet.ship.velx;
+          ship.vely = packet.ship.vely;
         });
       }
       break;
     }
     case "Client": {
       networkConnection.server.on("data", (data) => {
-        const packet: ClientPacket = data;
+        const packet: HostToClient = data;
         console.log('server data', data)
-        // Hacky
-        const ship = world.getShipById(packet.shipId);
-        ship.x = packet.x;
-        ship.y = packet.y;
-        ship.velx = packet.velx;
-        ship.vely = packet.vely;
+        for (const shipPacket of packet.ships) {
+          const ship = world.getShipById(shipPacket.shipId);
+          ship.x = shipPacket.x;
+          ship.y = shipPacket.y;
+          ship.velx = shipPacket.velx;
+          ship.vely = shipPacket.vely;
+        }
       });
     }
       // TODO (client gets update from host)
