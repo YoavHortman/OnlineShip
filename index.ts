@@ -293,6 +293,8 @@ class Ship {
 
   constructor(id: number) {
     this.id = id;
+    this.x += this.x * id;
+    this.y += this.y * id;
   }
 
   public step(controller: Controller) {
@@ -340,6 +342,10 @@ class Ship {
   }
 }
 
+
+const VectorLength = (x: number, y: number) => {
+  return Math.sqrt(x * x + y * y);
+}
 class World {
   public ships: readonly Ship[] = [new Ship(0), new Ship(1)];
 
@@ -362,6 +368,28 @@ class World {
       } else {
         ship.step(ship.futureInputs[0]);
         ship.futureInputs.shift();
+      }
+    }
+    for (const ship1 of this.ships) {
+      for (const ship2 of this.ships) {
+        if (ship1.id < ship2.id) {
+          const deltaX = ship1.x - ship2.x;
+          const deltaY = ship1.y - ship2.y;
+          const deltaLen = VectorLength(deltaX, deltaY);
+          if (deltaLen < ship1.radius + ship2.radius) {
+            ship1.velx *= -1;
+            ship1.vely *= -1;
+            ship2.velx *= -1;
+            ship2.vely *= -1;
+            const push = ship1.radius + ship2.radius - deltaLen;
+            const pushX = deltaX / deltaLen * push;
+            const pushY = deltaY / deltaLen * push;
+            ship2.x -= pushX / 2;
+            ship2.y -= pushY / 2;
+            ship1.x += pushX / 2;
+            ship1.y += pushY / 2;
+          }
+        }
       }
     }
   }

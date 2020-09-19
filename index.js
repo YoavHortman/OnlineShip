@@ -229,6 +229,8 @@ var Ship = /** @class */ (function () {
          */
         this.futureInputs = [];
         this.id = id;
+        this.x += this.x * id;
+        this.y += this.y * id;
     }
     Ship.prototype.step = function (controller) {
         if (controller.rightKey) {
@@ -271,6 +273,9 @@ var Ship = /** @class */ (function () {
     };
     return Ship;
 }());
+var VectorLength = function (x, y) {
+    return Math.sqrt(x * x + y * y);
+};
 var World = /** @class */ (function () {
     function World() {
         this.ships = [new Ship(0), new Ship(1)];
@@ -292,6 +297,30 @@ var World = /** @class */ (function () {
             else {
                 ship.step(ship.futureInputs[0]);
                 ship.futureInputs.shift();
+            }
+        }
+        for (var _b = 0, _c = this.ships; _b < _c.length; _b++) {
+            var ship1 = _c[_b];
+            for (var _d = 0, _e = this.ships; _d < _e.length; _d++) {
+                var ship2 = _e[_d];
+                if (ship1.id < ship2.id) {
+                    var deltaX = ship1.x - ship2.x;
+                    var deltaY = ship1.y - ship2.y;
+                    var deltaLen = VectorLength(deltaX, deltaY);
+                    if (deltaLen < ship1.radius + ship2.radius) {
+                        ship1.velx *= -1;
+                        ship1.vely *= -1;
+                        ship2.velx *= -1;
+                        ship2.vely *= -1;
+                        var push = ship1.radius + ship2.radius - deltaLen;
+                        var pushX = deltaX / deltaLen * push;
+                        var pushY = deltaY / deltaLen * push;
+                        ship2.x -= pushX / 2;
+                        ship2.y -= pushY / 2;
+                        ship1.x += pushX / 2;
+                        ship1.y += pushY / 2;
+                    }
+                }
             }
         }
     };
