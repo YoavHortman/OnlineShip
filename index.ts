@@ -2,6 +2,9 @@ const WEBRTC_OPTIONS: Peer.PeerConnectOption = {
   serialization: "json"
 };
 
+const FRAME_TIME = 1 / 60 * 1000;
+const FRAMES_PER_PACKET = 2;
+
 // Main function for server host
 function hostServer(idCallback: (id: string) => void): void {
   console.log("SERVER");
@@ -26,27 +29,10 @@ function hostServer(idCallback: (id: string) => void): void {
       console.log("open event");
       startGame({
         type: "Host",
-        clients: [connection]
+        clients: [{ dataConnection: connection, shipId: 1 }],
+        shipId: 0
       });
     });
-
-    // let pingSent: Date = new Date();
-
-    // connection.on("data", (data) => {
-    //     const pingMillis = new Date().getTime() - pingSent.getTime()
-    //     console.log("ping time:", pingMillis);
-
-    //     console.log("data", data);
-    //     setTimeout(() => {
-    //         pingSent = new Date();
-    //         connection.send({ ping: 5 });
-    //     }, 100);
-    // });
-
-    // setTimeout(() => {
-    //     console.log("sending");
-    //     connection.send({ hello: "world" });
-    // }, 3000);
   });
 }
 
@@ -70,30 +56,36 @@ function connectToServer(id: string): void {
       console.log("open");
       startGame({
         type: "Client",
-        server: conn
+        server: conn,
+        shipId: 1
       });
     });
   });
 }
 
-class Controller {
-  upKey: boolean = false;
-  downKey: boolean = false;
-  leftKey: boolean = false;
-  rightKey: boolean = false;
+interface Controller {
+  upKey: boolean;
+  downKey: boolean;
+  leftKey: boolean;
+  rightKey: boolean;
 }
 
 type NetworkConnection = NetworkConnection.Host | NetworkConnection.Client;
-
+interface HostPeer {
+  dataConnection: Peer.DataConnection;
+  shipId: number;
+}
 namespace NetworkConnection {
   export interface Host {
     type: "Host";
-    clients: Peer.DataConnection[];
+    clients: HostPeer[];
+    shipId: number;
   }
 
   export interface Client {
     type: "Client";
-    server: Peer.DataConnection;
+    server: Peer.DataConnection | null;
+    shipId: number;
   }
 }
 
@@ -107,22 +99,38 @@ interface ShipStatus {
 }
 
 interface HostToClient {
+  frameNumber: number;
   ships: ShipStatus[];
 }
 
 interface ClientToHost {
-  ship: ShipStatus;
+  /**
+   * Length should be equalt to FRAMES_PER_PACKET
+   */
+  inputArray: Controller[];
+}
+
+const emptyController = (): Controller => {
+  return {
+    downKey: false,
+    leftKey: false,
+    rightKey: false,
+    upKey: false
+  }
 }
 
 function startGame(networkConnection: NetworkConnection) {
-  const world = new World(networkConnection.type === "Host" ? 0 : 1);
+  const world = new World();
   const canvas = document.createElement("canvas");
   canvas.width = 500;
   canvas.height = 500;
   document.body.appendChild(canvas);
   const ctx = canvas.getContext("2d");
+  if (ctx === null) {
+    throw new Error("No ctx");
+  }
 
-  const controller = new Controller();
+  const controller: Controller = emptyController();
 
   document.addEventListener("keydown", (e) => {
     switch (e.keyCode) {
@@ -157,22 +165,28 @@ function startGame(networkConnection: NetworkConnection) {
     }
   });
 
-  const NETWORK_PACKET_TIME = 100;
-
-  let lastNetworkPacketSent = 0;
-
+  let frameCount = 0;
+  let gameStartedTime: number;
+  let clientControllerHistory: Controller[] = []
   const frame = (time: number) => {
-    // console.log("frame", time);
-    world.step(controller);
+    const currTime = time - gameStartedTime;
+    const msSinceStep = currTime - frameCount * FRAME_TIME;
+    const numSteps = Math.floor(msSinceStep / FRAME_TIME);
+    switch (networkConnection.type) {
+      case "Host": {
+        for (let i = 0; i < numSteps; i++) {
+          frameCount++;
+          const ship = world.getShipById(networkConnection.shipId);
+          if (ship === undefined) {
+            throw new Error("Big issue");
+          }
+          ship.futureInputs = [controller];
 
-    if (time - lastNetworkPacketSent >= NETWORK_PACKET_TIME) {
-      // Send packet
+          world.step();
 
-      switch (networkConnection.type) {
-        case "Host":
-          {
-
+          if (frameCount % FRAMES_PER_PACKET === 0) {
             const packet: HostToClient = {
+              frameNumber: frameCount,
               ships: world.ships.map((ship) => {
                 return {
                   shipId: ship.id,
@@ -183,67 +197,79 @@ function startGame(networkConnection: NetworkConnection) {
                 }
               })
             };
-
             for (const client of networkConnection.clients) {
-              client.send(packet);
+              client.dataConnection.send(packet);
             }
           }
-          break;
-        case "Client": {
-          const ship = world.getPlayerShip();
-          const packet: ClientToHost = {
-            ship: {
-              shipId: ship.id,
-              x: ship.x,
-              y: ship.y,
-              velx: ship.velx,
-              vely: ship.vely
-            }
-          };
-          networkConnection.server.send(packet);
-          break;
         }
+        break;
       }
-
-      lastNetworkPacketSent = time;
+      case "Client": {
+        for (let i = 0; i < numSteps; i++) {
+          frameCount++;
+          const ship = world.getShipById(networkConnection.shipId);
+          if (ship === undefined) {
+            throw new Error("Big issue");
+          }
+          ship.futureInputs = [controller];
+          world.step();
+          clientControllerHistory.push(controller);
+          if (clientControllerHistory.length === FRAMES_PER_PACKET) {
+            const packet: ClientToHost = {
+              inputArray: clientControllerHistory
+            };
+            networkConnection.server?.send(packet);
+            clientControllerHistory = [];
+          }
+        }
+        break;
+      }
     }
 
     world.render(ctx);
     requestAnimationFrame(frame);
   };
 
-  requestAnimationFrame(frame);
-
-
+  // Kick off
+  requestAnimationFrame((time) => {
+    gameStartedTime = time;
+    requestAnimationFrame(frame);
+  });
   switch (networkConnection.type) {
     case "Host": {
       for (const client of networkConnection.clients) {
-        client.on("data", (data) => {
+        client.dataConnection.on("data", (data) => {
           const packet: ClientToHost = data;
-          const ship = world.getShipById(packet.ship.shipId);
-          ship.x = packet.ship.x;
-          ship.y = packet.ship.y;
-          ship.velx = packet.ship.velx;
-          ship.vely = packet.ship.vely;
+
+          const ship = world.getShipById(client.shipId);
+          if (ship === undefined) {
+            throw new Error("Impssoible");
+          }
+          console.log(packet);
+          ship.futureInputs = ship.futureInputs.concat(packet.inputArray);
         });
       }
       break;
     }
     case "Client": {
-      networkConnection.server.on("data", (data) => {
-        const packet: HostToClient = data;
-        console.log('server data', data)
-        for (const shipPacket of packet.ships) {
-          const ship = world.getShipById(shipPacket.shipId);
-          ship.x = shipPacket.x;
-          ship.y = shipPacket.y;
-          ship.velx = shipPacket.velx;
-          ship.vely = shipPacket.vely;
-        }
-      });
-    }
-      // TODO (client gets update from host)
+      if (networkConnection.server !== null) {
+        networkConnection.server.on("data", (data) => {
+          const packet: HostToClient = data;
+          console.log('server data', data)
+          for (const shipPacket of packet.ships) {
+            const ship = world.getShipById(shipPacket.shipId);
+            if (ship === undefined) {
+              throw new Error("impossible..")
+            }
+            ship.x = shipPacket.x;
+            ship.y = shipPacket.y;
+            ship.velx = shipPacket.velx;
+            ship.vely = shipPacket.vely;
+          }
+        });
+      }
       break;
+    }
   }
 }
 
@@ -251,8 +277,7 @@ const GAME_WIDTH: number = 500;
 const GAME_HEIGHT: number = 500;
 
 class Ship {
-  id: number;
-  public playerControlled: boolean;
+  readonly id: number;
 
   public radius: number = 30;
 
@@ -260,6 +285,11 @@ class Ship {
   public y: number = 30;
   public velx: number = 0;
   public vely: number = 0;
+
+  /** 
+   * Only used on host
+   */
+  public futureInputs: Controller[] = [];
 
   constructor(id: number) {
     this.id = id;
@@ -313,11 +343,11 @@ class Ship {
 class World {
   public ships: readonly Ship[] = [new Ship(0), new Ship(1)];
 
-  public constructor(myShipId: number) {
-    this.getShipById(myShipId).playerControlled = true;
+  public constructor() {
+
   }
 
-  public getShipById(id: number): Ship {
+  public getShipById(id: number): Ship | undefined {
     for (const ship of this.ships) {
       if (ship.id === id) {
         return ship;
@@ -325,20 +355,13 @@ class World {
     }
   }
 
-  public getPlayerShip(): Ship {
+  public step() {
     for (const ship of this.ships) {
-      if (ship.playerControlled) {
-        return ship;
-      }
-    }
-  }
-
-  public step(controller: Controller) {
-    for (const ship of this.ships) {
-      if (ship.playerControlled) {
-        ship.step(controller);
+      if (ship.futureInputs.length === 0) {
+        ship.step(emptyController())
       } else {
-        ship.step(new Controller());
+        ship.step(ship.futureInputs[0]);
+        ship.futureInputs.shift();
       }
     }
   }
@@ -351,10 +374,16 @@ class World {
     }
   }
 }
-
+function singlePlayerClient() {
+  startGame({ type: 'Client', server: null, shipId: 1 });
+}
+function singlePlayerHost() {
+  startGame({ type: 'Host', clients: [], shipId: 0 });
+}
 window.hostServer = hostServer;
 window.connectToServer = connectToServer;
-
+window.singlePlayerClient = singlePlayerClient;
+window.singlePlayerHost = singlePlayerHost;
 // function main2() {
 //     const peer = new Peer();
 //     peer.on("open", (id: string) => {

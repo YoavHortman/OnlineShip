@@ -11,6 +11,8 @@
   <div>
     <button onclick="hostServer(() => {})">Host server</button>
   </div>
+  <div><button onclick="singlePlayerClient()">Single client</button></div>
+  <div><button onclick="singlePlayerHost()">Single host</button></div>
   <div>
     <input id='SERVER_ID' type='text' placeholder="Server id"/>
     <button onclick="connectToServer(document.getElementById('SERVER_ID').textContent)">Join server</button>

@@ -1,6 +1,9 @@
+"use strict";
 var WEBRTC_OPTIONS = {
     serialization: "json"
 };
+var FRAME_TIME = 1 / 60 * 1000;
+var FRAMES_PER_PACKET = 2;
 // Main function for server host
 function hostServer(idCallback) {
     console.log("SERVER");
@@ -22,23 +25,10 @@ function hostServer(idCallback) {
             console.log("open event");
             startGame({
                 type: "Host",
-                clients: [connection]
+                clients: [{ dataConnection: connection, shipId: 1 }],
+                shipId: 0
             });
         });
-        // let pingSent: Date = new Date();
-        // connection.on("data", (data) => {
-        //     const pingMillis = new Date().getTime() - pingSent.getTime()
-        //     console.log("ping time:", pingMillis);
-        //     console.log("data", data);
-        //     setTimeout(() => {
-        //         pingSent = new Date();
-        //         connection.send({ ping: 5 });
-        //     }, 100);
-        // });
-        // setTimeout(() => {
-        //     console.log("sending");
-        //     connection.send({ hello: "world" });
-        // }, 3000);
     });
 }
 // Main function for client
@@ -59,28 +49,31 @@ function connectToServer(id) {
             console.log("open");
             startGame({
                 type: "Client",
-                server: conn
+                server: conn,
+                shipId: 1
             });
         });
     });
 }
-var Controller = /** @class */ (function () {
-    function Controller() {
-        this.upKey = false;
-        this.downKey = false;
-        this.leftKey = false;
-        this.rightKey = false;
-    }
-    return Controller;
-}());
+var emptyController = function () {
+    return {
+        downKey: false,
+        leftKey: false,
+        rightKey: false,
+        upKey: false
+    };
+};
 function startGame(networkConnection) {
-    var world = new World(networkConnection.type === "Host" ? 0 : 1);
+    var world = new World();
     var canvas = document.createElement("canvas");
     canvas.width = 500;
     canvas.height = 500;
     document.body.appendChild(canvas);
     var ctx = canvas.getContext("2d");
-    var controller = new Controller();
+    if (ctx === null) {
+        throw new Error("No ctx");
+    }
+    var controller = emptyController();
     document.addEventListener("keydown", function (e) {
         switch (e.keyCode) {
             case 38: // Up
@@ -113,17 +106,27 @@ function startGame(networkConnection) {
                 break;
         }
     });
-    var NETWORK_PACKET_TIME = 100;
-    var lastNetworkPacketSent = 0;
+    var frameCount = 0;
+    var gameStartedTime;
+    var clientControllerHistory = [];
     var frame = function (time) {
-        // console.log("frame", time);
-        world.step(controller);
-        if (time - lastNetworkPacketSent >= NETWORK_PACKET_TIME) {
-            // Send packet
-            switch (networkConnection.type) {
-                case "Host":
-                    {
+        var _a;
+        var currTime = time - gameStartedTime;
+        var msSinceStep = currTime - frameCount * FRAME_TIME;
+        var numSteps = Math.floor(msSinceStep / FRAME_TIME);
+        switch (networkConnection.type) {
+            case "Host": {
+                for (var i = 0; i < numSteps; i++) {
+                    frameCount++;
+                    var ship = world.getShipById(networkConnection.shipId);
+                    if (ship === undefined) {
+                        throw new Error("Big issue");
+                    }
+                    ship.futureInputs = [controller];
+                    world.step();
+                    if (frameCount % FRAMES_PER_PACKET === 0) {
                         var packet = {
+                            frameNumber: frameCount,
                             ships: world.ships.map(function (ship) {
                                 return {
                                     shipId: ship.id,
@@ -134,56 +137,73 @@ function startGame(networkConnection) {
                                 };
                             })
                         };
-                        for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
-                            var client = _a[_i];
-                            client.send(packet);
+                        for (var _i = 0, _b = networkConnection.clients; _i < _b.length; _i++) {
+                            var client = _b[_i];
+                            client.dataConnection.send(packet);
                         }
                     }
-                    break;
-                case "Client": {
-                    var ship = world.getPlayerShip();
-                    var packet = {
-                        ship: {
-                            shipId: ship.id,
-                            x: ship.x,
-                            y: ship.y,
-                            velx: ship.velx,
-                            vely: ship.vely
-                        }
-                    };
-                    networkConnection.server.send(packet);
-                    break;
                 }
+                break;
             }
-            lastNetworkPacketSent = time;
+            case "Client": {
+                for (var i = 0; i < numSteps; i++) {
+                    frameCount++;
+                    var ship = world.getShipById(networkConnection.shipId);
+                    if (ship === undefined) {
+                        throw new Error("Big issue");
+                    }
+                    ship.futureInputs = [controller];
+                    world.step();
+                    clientControllerHistory.push(controller);
+                    if (clientControllerHistory.length === FRAMES_PER_PACKET) {
+                        var packet = {
+                            inputArray: clientControllerHistory
+                        };
+                        (_a = networkConnection.server) === null || _a === void 0 ? void 0 : _a.send(packet);
+                        clientControllerHistory = [];
+                    }
+                }
+                break;
+            }
         }
         world.render(ctx);
         requestAnimationFrame(frame);
     };
-    requestAnimationFrame(frame);
+    // Kick off
+    requestAnimationFrame(function (time) {
+        gameStartedTime = time;
+        requestAnimationFrame(frame);
+    });
     switch (networkConnection.type) {
         case "Host": {
+            var _loop_1 = function (client) {
+                client.dataConnection.on("data", function (data) {
+                    var packet = data;
+                    var ship = world.getShipById(client.shipId);
+                    if (ship === undefined) {
+                        throw new Error("Impssoible");
+                    }
+                    console.log(packet);
+                    ship.futureInputs = ship.futureInputs.concat(packet.inputArray);
+                });
+            };
             for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
                 var client = _a[_i];
-                client.on("data", function (data) {
-                    var packet = data;
-                    var ship = world.getShipById(packet.ship.shipId);
-                    ship.x = packet.ship.x;
-                    ship.y = packet.ship.y;
-                    ship.velx = packet.ship.velx;
-                    ship.vely = packet.ship.vely;
-                });
+                _loop_1(client);
             }
             break;
         }
-        case "Client":
-            {
+        case "Client": {
+            if (networkConnection.server !== null) {
                 networkConnection.server.on("data", function (data) {
                     var packet = data;
                     console.log('server data', data);
                     for (var _i = 0, _a = packet.ships; _i < _a.length; _i++) {
                         var shipPacket = _a[_i];
                         var ship = world.getShipById(shipPacket.shipId);
+                        if (ship === undefined) {
+                            throw new Error("impossible..");
+                        }
                         ship.x = shipPacket.x;
                         ship.y = shipPacket.y;
                         ship.velx = shipPacket.velx;
@@ -191,8 +211,8 @@ function startGame(networkConnection) {
                     }
                 });
             }
-            // TODO (client gets update from host)
             break;
+        }
     }
 }
 var GAME_WIDTH = 500;
@@ -204,6 +224,10 @@ var Ship = /** @class */ (function () {
         this.y = 30;
         this.velx = 0;
         this.vely = 0;
+        /**
+         * Only used on host
+         */
+        this.futureInputs = [];
         this.id = id;
     }
     Ship.prototype.step = function (controller) {
@@ -248,9 +272,8 @@ var Ship = /** @class */ (function () {
     return Ship;
 }());
 var World = /** @class */ (function () {
-    function World(myShipId) {
+    function World() {
         this.ships = [new Ship(0), new Ship(1)];
-        this.getShipById(myShipId).playerControlled = true;
     }
     World.prototype.getShipById = function (id) {
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
@@ -260,22 +283,15 @@ var World = /** @class */ (function () {
             }
         }
     };
-    World.prototype.getPlayerShip = function () {
+    World.prototype.step = function () {
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
             var ship = _a[_i];
-            if (ship.playerControlled) {
-                return ship;
-            }
-        }
-    };
-    World.prototype.step = function (controller) {
-        for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
-            var ship = _a[_i];
-            if (ship.playerControlled) {
-                ship.step(controller);
+            if (ship.futureInputs.length === 0) {
+                ship.step(emptyController());
             }
             else {
-                ship.step(new Controller());
+                ship.step(ship.futureInputs[0]);
+                ship.futureInputs.shift();
             }
         }
     };
@@ -289,8 +305,16 @@ var World = /** @class */ (function () {
     };
     return World;
 }());
+function singlePlayerClient() {
+    startGame({ type: 'Client', server: null, shipId: 1 });
+}
+function singlePlayerHost() {
+    startGame({ type: 'Host', clients: [], shipId: 0 });
+}
 window.hostServer = hostServer;
 window.connectToServer = connectToServer;
+window.singlePlayerClient = singlePlayerClient;
+window.singlePlayerHost = singlePlayerHost;
 // function main2() {
 //     const peer = new Peer();
 //     peer.on("open", (id: string) => {
