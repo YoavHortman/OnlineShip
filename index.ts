@@ -120,7 +120,7 @@ const emptyController = (): Controller => {
 }
 
 function startGame(networkConnection: NetworkConnection) {
-  const world = new World();
+  const world = new GameWorld();
   const canvas = document.createElement("canvas");
   canvas.width = 500;
   canvas.height = 500;
@@ -129,7 +129,8 @@ function startGame(networkConnection: NetworkConnection) {
   if (ctx === null) {
     throw new Error("No ctx");
   }
-
+  ctx.scale(10, 10);
+  // ctx?.scale()
   const controller: Controller = emptyController();
 
   document.addEventListener("keydown", (e) => {
@@ -361,11 +362,51 @@ const elasticCollision = (normalX: number, normalY: number, velX: number, velY: 
   return [velX - 2 * projX, velY - 2 * projY];
 }
 
-class World {
+(window as any).Box2D().then((box2D: any) => {
+  console.log("Box2D - INIT");
+  (window as any).box2D = box2D;
+  (window as any).b2Vec2 = box2D.b2Vec2;
+  (window as any).b2World = box2D.b2World;
+  (window as any).b2_dynamicBody = box2D.b2_dynamicBody;
+  (window as any).b2BodyDef = box2D.b2BodyDef;
+  (window as any).b2_staticBody = box2D.b2_staticBody;
+  (window as any).b2_kinematicBody = box2D.b2_kinematicBody;
+  (window as any).b2CircleShape = box2D.b2CircleShape;
+  (window as any).b2EdgeShape = box2D.b2EdgeShape;
+  (window as any).b2FixtureDef = box2D.b2FixtureDef;
+  (window as any).b2Transform = box2D.b2Transform;
+  (window as any).b2Mat22 = box2D.b2Mat22;
+})
+class GameWorld {
   public ships: readonly Ship[] = [new Ship(0), new Ship(1)];
 
-  public constructor() {
+  dynamicBody: b2Body;
+  groundBody: b2Body;
+  readonly world: b2World;
 
+  public constructor() {
+    this.world = new b2World(new b2Vec2(0, 30), true);
+
+    // circle
+    const bodyDef = new b2BodyDef();
+    bodyDef.set_type(b2_dynamicBody);
+    bodyDef.position.Set(20, 20);
+    bodyDef.linearDamping = 0;
+    bodyDef.angularDamping = 0;
+    this.dynamicBody = this.world.CreateBody(bodyDef);
+    const circleShape = new b2CircleShape();
+    circleShape.set_m_radius(1);
+    const fixt = this.dynamicBody.CreateFixture(circleShape, 1.0);
+    fixt.SetRestitution(0.2);
+
+    // ground
+    this.groundBody = this.world.CreateBody(new b2BodyDef());
+    var edgeShape = new b2EdgeShape();
+    edgeShape.Set(new b2Vec2(0, 40), new b2Vec2(50, 30));
+    const fixtureDef = new b2FixtureDef();
+    fixtureDef.set_shape(edgeShape);
+    fixtureDef.restitution = 0.2;
+    this.groundBody.CreateFixture(fixtureDef);
   }
 
   public getShipById(id: number): Ship | undefined {
@@ -381,10 +422,28 @@ class World {
       if (ship.futureInputs.length === 0) {
         ship.step(emptyController())
       } else {
-        ship.step(ship.futureInputs[0]);
+        // ship.step(ship.futureInputs[0]);
+
+        if (ship.futureInputs[0].leftKey) {
+          this.dynamicBody.ApplyForce(new b2Vec2(-100, 0), this.dynamicBody.GetPosition());
+        }
+        if (ship.futureInputs[0].rightKey) {
+          this.dynamicBody.ApplyForce(new b2Vec2(100, 0), this.dynamicBody.GetPosition());
+        }
+
+        if (ship.futureInputs[0].upKey) {
+          this.dynamicBody.ApplyForce(new b2Vec2(0, -100), this.dynamicBody.GetPosition());
+        }
+
+
+        if (ship.futureInputs[0].downKey) {
+          this.dynamicBody.ApplyForce(new b2Vec2(0, 100), this.dynamicBody.GetPosition());
+        }
+
         ship.futureInputs.shift();
       }
     }
+    this.world.Step(FRAME_TIME / 1000, 8, 3);
     for (const ship1 of this.ships) {
       for (const ship2 of this.ships) {
         if (ship1.id < ship2.id) {
@@ -415,12 +474,31 @@ class World {
     }
   }
 
+
   public render(ctx: CanvasRenderingContext2D) {
     ctx.fillStyle = "#cccccc";
     ctx.fillRect(0, 0, 500, 500);
+    
+    ctx.beginPath();
+    ctx.moveTo(0, 40);
+    ctx.lineTo(50, 30);
+    ctx.stroke();
     for (const ship of this.ships) {
       ship.render(ctx);
     }
+
+    // Box2D stuff:
+
+    
+    const x = this.dynamicBody.GetPosition().x;
+    const y = this.dynamicBody.GetPosition().y;
+    ctx.translate(x, y);
+    ctx.rotate(this.dynamicBody.GetAngle());
+    ctx.fillStyle = "red";
+    ctx.fillRect(-0.5, -0.5, 1, 1);
+    ctx.rotate(-this.dynamicBody.GetAngle());
+    ctx.translate(-x, -y);
+    
   }
 }
 function singlePlayerClient() {

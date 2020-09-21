@@ -64,7 +64,7 @@ var emptyController = function () {
     };
 };
 function startGame(networkConnection) {
-    var world = new World();
+    var world = new GameWorld();
     var canvas = document.createElement("canvas");
     canvas.width = 500;
     canvas.height = 500;
@@ -73,6 +73,8 @@ function startGame(networkConnection) {
     if (ctx === null) {
         throw new Error("No ctx");
     }
+    ctx.scale(10, 10);
+    // ctx?.scale()
     var controller = emptyController();
     document.addEventListener("keydown", function (e) {
         switch (e.keyCode) {
@@ -288,11 +290,46 @@ var elasticCollision = function (normalX, normalY, velX, velY) {
     var projY = dot * normalY;
     return [velX - 2 * projX, velY - 2 * projY];
 };
-var World = /** @class */ (function () {
-    function World() {
+window.Box2D().then(function (box2D) {
+    console.log("Box2D - INIT");
+    window.box2D = box2D;
+    window.b2Vec2 = box2D.b2Vec2;
+    window.b2World = box2D.b2World;
+    window.b2_dynamicBody = box2D.b2_dynamicBody;
+    window.b2BodyDef = box2D.b2BodyDef;
+    window.b2_staticBody = box2D.b2_staticBody;
+    window.b2_kinematicBody = box2D.b2_kinematicBody;
+    window.b2CircleShape = box2D.b2CircleShape;
+    window.b2EdgeShape = box2D.b2EdgeShape;
+    window.b2FixtureDef = box2D.b2FixtureDef;
+    window.b2Transform = box2D.b2Transform;
+    window.b2Mat22 = box2D.b2Mat22;
+});
+var GameWorld = /** @class */ (function () {
+    function GameWorld() {
         this.ships = [new Ship(0), new Ship(1)];
+        this.world = new b2World(new b2Vec2(0, 30), true);
+        // circle
+        var bodyDef = new b2BodyDef();
+        bodyDef.set_type(b2_dynamicBody);
+        bodyDef.position.Set(20, 20);
+        bodyDef.linearDamping = 0;
+        bodyDef.angularDamping = 0;
+        this.dynamicBody = this.world.CreateBody(bodyDef);
+        var circleShape = new b2CircleShape();
+        circleShape.set_m_radius(1);
+        var fixt = this.dynamicBody.CreateFixture(circleShape, 1.0);
+        fixt.SetRestitution(0.2);
+        // ground
+        this.groundBody = this.world.CreateBody(new b2BodyDef());
+        var edgeShape = new b2EdgeShape();
+        edgeShape.Set(new b2Vec2(0, 40), new b2Vec2(50, 30));
+        var fixtureDef = new b2FixtureDef();
+        fixtureDef.set_shape(edgeShape);
+        fixtureDef.restitution = 0.2;
+        this.groundBody.CreateFixture(fixtureDef);
     }
-    World.prototype.getShipById = function (id) {
+    GameWorld.prototype.getShipById = function (id) {
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
             var ship = _a[_i];
             if (ship.id === id) {
@@ -300,17 +337,30 @@ var World = /** @class */ (function () {
             }
         }
     };
-    World.prototype.step = function () {
+    GameWorld.prototype.step = function () {
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
             var ship = _a[_i];
             if (ship.futureInputs.length === 0) {
                 ship.step(emptyController());
             }
             else {
-                ship.step(ship.futureInputs[0]);
+                // ship.step(ship.futureInputs[0]);
+                if (ship.futureInputs[0].leftKey) {
+                    this.dynamicBody.ApplyForce(new b2Vec2(-100, 0), this.dynamicBody.GetPosition());
+                }
+                if (ship.futureInputs[0].rightKey) {
+                    this.dynamicBody.ApplyForce(new b2Vec2(100, 0), this.dynamicBody.GetPosition());
+                }
+                if (ship.futureInputs[0].upKey) {
+                    this.dynamicBody.ApplyForce(new b2Vec2(0, -100), this.dynamicBody.GetPosition());
+                }
+                if (ship.futureInputs[0].downKey) {
+                    this.dynamicBody.ApplyForce(new b2Vec2(0, 100), this.dynamicBody.GetPosition());
+                }
                 ship.futureInputs.shift();
             }
         }
+        this.world.Step(FRAME_TIME / 1000, 8, 3);
         for (var _b = 0, _c = this.ships; _b < _c.length; _b++) {
             var ship1 = _c[_b];
             for (var _d = 0, _e = this.ships; _d < _e.length; _d++) {
@@ -340,15 +390,28 @@ var World = /** @class */ (function () {
             }
         }
     };
-    World.prototype.render = function (ctx) {
+    GameWorld.prototype.render = function (ctx) {
         ctx.fillStyle = "#cccccc";
         ctx.fillRect(0, 0, 500, 500);
+        ctx.beginPath();
+        ctx.moveTo(0, 40);
+        ctx.lineTo(50, 30);
+        ctx.stroke();
         for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
             var ship = _a[_i];
             ship.render(ctx);
         }
+        // Box2D stuff:
+        var x = this.dynamicBody.GetPosition().x;
+        var y = this.dynamicBody.GetPosition().y;
+        ctx.translate(x, y);
+        ctx.rotate(this.dynamicBody.GetAngle());
+        ctx.fillStyle = "red";
+        ctx.fillRect(-0.5, -0.5, 1, 1);
+        ctx.rotate(-this.dynamicBody.GetAngle());
+        ctx.translate(-x, -y);
     };
-    return World;
+    return GameWorld;
 }());
 function singlePlayerClient() {
     startGame({ type: 'Client', server: null, shipId: 1 });
