@@ -342,7 +342,7 @@ declare class b2World {
   // public DestroyJoint(j: Joints.b2Joint): void;
   public DrawDebugData(): void;
   // public DrawJoint(j: Joints.b2Joint): void;
-  // public DrawShape(shape: b2Shapes.b2Shape, xf: b2Transform, color: b2Common.b2Color): void;
+  // public DrawShape(shape: b2Shape, xf: b2Transform, color: b2Common.b2Color): void;
   public GetBodyCount(): number;
   public GetBodyList(): b2Body;
   public GetContactCount(): number;
@@ -759,7 +759,7 @@ declare class b2Fixture {
   // public GetMassData(massData?: b2Shapes.b2MassData): b2Shapes.b2MassData;
   public GetNext(): b2Fixture;
   public GetRestitution(): number;
-  // public GetShape: b2Shapes.b2Shape;
+  public GetShape(): b2Shape;
   public GetType(): number;
   public GetUserData(): any;
   public IsSensor(): boolean;
@@ -858,7 +858,7 @@ declare class b2Shape {
   // public RayCast(
   // 	output: b2RayCastOutput,
   // 	input: b2RayCastInput,
-  // 	transform: b2Transform): bool;
+  // 	transform: b2Transform): boolean;
 
   /**
   * Set the shape values from another shape.
@@ -878,7 +878,7 @@ declare class b2Shape {
   // 	shape1: b2Shape,
   // 	transform1: b2Transform,
   // 	shape2: b2Shape,
-  // 	transform2: b2Transform): bool;
+  // 	transform2: b2Transform): boolean;
 
   /**
   * Test a point for containment in this shape. This only works for convex shapes.
@@ -1128,7 +1128,7 @@ declare class b2EdgeShape extends b2Shape {
   // public RayCast(
   // 	output: b2RayCastOutput,
   // 	input: b2RayCastInput,
-  // 	transform: b2Transform): bool;
+  // 	transform: b2Transform): boolean;
 
   /**
   * Test a point for containment in this shape. This only works for convex shapes.
@@ -1138,6 +1138,123 @@ declare class b2EdgeShape extends b2Shape {
   **/
   public TestPoint(xf: b2Transform, p: b2Vec2): boolean;
 }
+
+/**
+* Axis aligned bounding box.
+**/
+declare class b2AABB {
+
+  /**
+  * Lower bound.
+  **/
+  public lowerBound: b2Vec2;
+
+  /**
+  * Upper bound.
+  **/
+  public upperBound: b2Vec2;
+
+  /**
+  * Combines two AABBs into one with max values for upper bound and min values for lower bound.
+  * @aabb1 First AABB to combine.
+  * @aabb2 Second AABB to combine.
+  * @return New AABB with max values from aabb1 and aabb2.
+  **/
+  public static Combine(aabb1: b2AABB, aabb2: b2AABB): b2AABB;
+
+  /**
+  * Combines two AABBs into one with max values for upper bound and min values for lower bound.  The result is stored in this AABB.
+  * @aabb1 First AABB to combine.
+  * @aabb2 Second AABB to combine.
+  **/
+  public Combine(aabb1: b2AABB, aabb2: b2AABB): void;
+
+  /**
+  * Determines if an AABB is contained within this one.
+  * @aabb AABB to see if it is contained.
+  * @return True if aabb is contained, otherwise false.
+  **/
+  public Contains(aabb: b2AABB): boolean;
+
+  /**
+  * Gets the center of the AABB.
+  * @return Center of this AABB.
+  **/
+  public GetCenter(): b2Vec2;
+
+  /**
+  * Gets the extents of the AABB (half-widths).
+  * @return Extents of this AABB.
+  **/
+  public GetExtents(): b2Vec2;
+
+  /**
+  * Verify that the bounds are sorted.
+  * @return True if the bounds are sorted, otherwise false.
+  **/
+  public IsValid(): boolean;
+
+  /**
+  * Perform a precise raycast against this AABB.
+  * @output Ray cast output values.
+  * @input Ray cast input values.
+  * @return True if the ray cast hits this AABB, otherwise false.
+  **/
+  public RayCast(output: b2RayCastOutput, input: b2RayCastInput): boolean;
+
+  /**
+  * Tests if another AABB overlaps this AABB.
+  * @other Other AABB to test for overlap.
+  * @return True if other overlaps this AABB, otherwise false.
+  **/
+  public TestOverlap(other: b2AABB): boolean;
+}
+
+/**
+* Ray cast input data.
+**/
+declare class b2RayCastInput {
+
+  /**
+  * Truncate the ray to reach up to this fraction from p1 to p2
+  **/
+  public maxFraction: number;
+
+  /**
+  * The start point of the ray.
+  **/
+  public p1: b2Vec2;
+
+  /**
+  * The end point of the ray.
+  **/
+  public p2: b2Vec2;
+
+  /**
+  * Creates a new ray cast input.
+  * @p1 Start point of the ray, default = null.
+  * @p2 End point of the ray, default = null.
+  * @maxFraction Truncate the ray to reach up to this fraction from p1 to p2.
+  **/
+  constructor(p1?: b2Vec2, p2?: b2Vec2, maxFraction?: number);
+}
+
+/**
+* Results of a ray cast.
+**/
+declare class b2RayCastOutput {
+
+  /**
+  * The fraction between p1 and p2 that the collision occurs at.
+  **/
+  public fraction: number;
+
+  /**
+  * The normal at the point of collision.
+  **/
+  public normal: b2Vec2;
+}
+
 
 /**
 * A transform contains translation and rotation. It is used to represent the position and orientation of rigid frames.

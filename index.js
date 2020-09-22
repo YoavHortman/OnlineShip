@@ -361,46 +361,18 @@ var GameWorld = /** @class */ (function () {
             }
         }
         this.world.Step(FRAME_TIME / 1000, 8, 3);
-        for (var _b = 0, _c = this.ships; _b < _c.length; _b++) {
-            var ship1 = _c[_b];
-            for (var _d = 0, _e = this.ships; _d < _e.length; _d++) {
-                var ship2 = _e[_d];
-                if (ship1.id < ship2.id) {
-                    var deltaX = ship1.x - ship2.x;
-                    var deltaY = ship1.y - ship2.y;
-                    var deltaLen = VectorLength(deltaX, deltaY);
-                    if (deltaLen < ship1.radius + ship2.radius) {
-                        var push = ship1.radius + ship2.radius - deltaLen;
-                        var pushX = deltaX / deltaLen * push;
-                        var pushY = deltaY / deltaLen * push;
-                        ship2.x -= pushX / 2;
-                        ship2.y -= pushY / 2;
-                        ship1.x += pushX / 2;
-                        ship1.y += pushY / 2;
-                        var normalX = deltaX / deltaLen;
-                        var normalY = deltaY / deltaLen;
-                        var _f = elasticCollision(normalX, normalY, ship1.velx, ship1.vely), ship1velx = _f[0], ship1vely = _f[1];
-                        ship1.velx = ship1velx;
-                        ship1.vely = ship1vely;
-                        var _g = elasticCollision(normalX, normalY, ship2.velx, ship2.vely), ship2velx = _g[0], ship2vely = _g[1];
-                        ship2.velx = ship2velx;
-                        ship2.vely = ship2vely;
-                    }
-                }
-            }
-        }
     };
     GameWorld.prototype.render = function (ctx) {
         ctx.fillStyle = "#cccccc";
-        ctx.fillRect(0, 0, 500, 500);
+        ctx.fillRect(0, 0, 50, 50);
         ctx.beginPath();
+        console.log(this.groundBody.GetFixtureList());
         ctx.moveTo(0, 40);
         ctx.lineTo(50, 30);
         ctx.stroke();
-        for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
-            var ship = _a[_i];
-            ship.render(ctx);
-        }
+        // for (const ship of this.ships) {
+        //   ship.render(ctx);
+        // }
         // Box2D stuff:
         var x = this.dynamicBody.GetPosition().x;
         var y = this.dynamicBody.GetPosition().y;
@@ -423,12 +395,4 @@ window.hostServer = hostServer;
 window.connectToServer = connectToServer;
 window.singlePlayerClient = singlePlayerClient;
 window.singlePlayerHost = singlePlayerHost;
-// function main2() {
-//     const peer = new Peer();
-//     peer.on("open", (id: string) => {
-//         console.log(id);
-//     });
-//     console.log("main2");
-// }
-// main2();
 //# sourceMappingURL=index.js.map
