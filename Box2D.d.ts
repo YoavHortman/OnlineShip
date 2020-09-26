@@ -393,14 +393,14 @@ declare class b2Body {
   * @point The world position of the point of application.
   **/
   public ApplyForce(force: b2Vec2, point: b2Vec2): void;
+  public ApplyForceToCenter(force: b2Vec2, wake?: boolean): void;
 
   /**
   * Apply an impulse at a point. This immediately modifies the velocity. It also modifies the angular velocity if the point of application is not at the center of mass. This wakes up the body.
   * @impules The world impulse vector, usually in N-seconds or kg-m/s.
   * @point The world position of the point of application.
   **/
-  public ApplyImpulse(impulse: b2Vec2, point: b2Vec2): void;
-
+  public ApplyLinearImpulse(impulse: b2Vec2, point: b2Vec2, wake?: boolean): void;
   /**
   * Apply a torque. This affects the angular velocity without affecting the linear velocity of the center of mass. This wakes up the body.
   * @torque Force applied about the z-axis (out of the screen), usually in N-m.
@@ -542,7 +542,7 @@ declare class b2Body {
   * Get the mass data of the body. The rotational inertial is relative to the center of mass.
   * @data Body's mass data, this argument is `out`.
   **/
-  // public GetMassData(data: b2Shapes.b2MassData): void;
+  public GetMassData(data: b2MassData): void;
 
   /**
   * Get the next body in the world's body list.
@@ -700,7 +700,7 @@ declare class b2Body {
   * @warning The supplied rotational inertia should be relative to the center of mass.
   * @massData New mass data properties.
   **/
-  // public SetMassData(massData: b2Shapes.b2MassData): void;
+  public SetMassData(massData: b2MassData): void;
 
   /**
   * Is this body allowed to sleep
@@ -712,7 +712,7 @@ declare class b2Body {
   * Set the position of the body's origin and rotation (radians). This breaks any contacts and wakes the other bodies. Note this is less efficient than the other overload - you should use that if the angle is available.
   * @xf Body's origin and rotation (radians).
   **/
-  public SetTransform(xf: b2Transform): void;
+  public SetTransform(position: b2Vec2, angle: number): void;
 
   /**
   * Set the type of this body. This may alter the mass and velocity
@@ -756,7 +756,7 @@ declare class b2Fixture {
   public GetDensity(): number;
   public GetFilterData(): any;
   public GetFriction(): number;
-  // public GetMassData(massData?: b2Shapes.b2MassData): b2Shapes.b2MassData;
+  public GetMassData(massData?: b2MassData): b2MassData;
   public GetNext(): b2Fixture;
   public GetRestitution(): number;
   public GetShape(): b2Shape;
@@ -766,10 +766,10 @@ declare class b2Fixture {
   // public RayCast(output: b2Collision.b2RayCastOutput, input: b2Collision.b2RayCastInput): boolean;
   public SetDensity(density: number): void;
   public SetFilterData(filter: any): void;
-  public setFriction(friction: number): void;
+  public SetFriction(friction: number): void;
   public SetRestitution(restitution: number): void;
-  public setSensor(sensor: boolean): void;
-  public setUserData(data: any): void;
+  public SetSensor(sensor: boolean): void;
+  public SetUserData(data: any): void;
   public TestPoint(p: b2Vec2): boolean;
 }
 declare class BodyDefType {
@@ -801,10 +801,11 @@ declare class b2Shape {
   public static startsInsideCollide: number;
 
   // Note: these enums are public in the source but no referenced by the documentation
-  public static e_unknownShape: number;
-  public static e_circleShape: number;
-  public static e_polygonShape: number;
-  public static e_edgeShape: number;
+  public static e_unknown: number;
+  public static e_circle: number;
+  public static e_chain: number;
+  public static e_polygon: number;
+  public static e_edge: number;
   public static e_shapeTypeCount: number;
 
   /**
@@ -823,7 +824,7 @@ declare class b2Shape {
   * Compute the mass properties of this shape using its dimensions and density. The inertia tensor is computed about the local origin, not the centroid.
   * @massData Calculate the mass, this argument is `out`.
   **/
-  // public ComputeMass(massData: b2MassData, density: number): void;
+  public ComputeMass(massData: b2MassData, density: number): void;
 
   /**
   * Compute the volume and centroid of this shape intersected with a half plane
@@ -898,7 +899,7 @@ declare class b2CircleShape extends b2Shape {
   /**
   * Creates a new circle shape.
   **/
-  constructor(radius?: number);
+  constructor();
 
   set_m_radius(radius: number): void;
 
@@ -913,7 +914,7 @@ declare class b2CircleShape extends b2Shape {
   * Compute the mass properties of this shape using its dimensions and density. The inertia tensor is computed about the local origin, not the centroid.
   * @massData Calculate the mass, this argument is `out`.
   **/
-  // public ComputeMass(massData: b2MassData, density: number): void;
+  public ComputeMass(massData: b2MassData, density: number): void;
 
   /**
   * Compute the volume and centroid of this shape intersected with a half plane
@@ -1010,7 +1011,7 @@ declare class b2EdgeShape extends b2Shape {
   * Compute the mass properties of this shape using its dimensions and density. The inertia tensor is computed about the local origin, not the centroid.
   * @massData Calculate the mass, this argument is `out`.
   **/
-  // public ComputeMass(massData: b2MassData, density: number): void;
+  public ComputeMass(massData: b2MassData, density: number): void;
 
   /**
   * Compute the volume and centroid of this shape intersected with a half plane
@@ -1137,6 +1138,12 @@ declare class b2EdgeShape extends b2Shape {
   * @return True if the point is in this shape, otherwise false.
   **/
   public TestPoint(xf: b2Transform, p: b2Vec2): boolean;
+}
+
+declare class b2ChainShape extends b2Shape {
+  constructor();
+  CreateLoop(ptr: number, length: number): void;
+  CreateChain(ptr: number, length: number): void;
 }
 
 /**
@@ -1301,4 +1308,53 @@ declare class b2Transform {
   * Set this to the identity transform.
   **/
   public SetIdentity(): void;
+}
+
+declare class b2PolygonShape extends b2Shape {
+  public static AsArray(vertices: any[], vertexCount: number): b2PolygonShape;
+  public static AsBox(hx: number, hy: number): b2PolygonShape;
+  public static AsEdge(v1: b2Vec2, b2: b2Vec2): b2PolygonShape;
+  public static AsOrientedBox(hx: number, hy: number, center?: b2Vec2, angle?: number): b2PolygonShape;
+  public static AsVector(vertices: any[], vertexCount: number): b2PolygonShape;
+
+  constructor();
+  public ComputeAABB(aabb: b2AABB, xf: b2Transform): void;
+  public ComputeMass(massData: b2MassData, density: number): void;
+  public ComputeSubmergedArea(normal: b2Vec2, offset: number, xf: b2Transform, c: b2Vec2): number;
+  public Copy(): b2PolygonShape;
+  public GetNormals(): any[];
+  public GetSupport(d: b2Vec2): number;
+  public GetSupportVertex(d: b2Vec2): b2Vec2;
+  public GetVertexCount(): number;
+  public GetVertices(): any[];
+  public RayCast(output: b2RayCastOutput, input: b2RayCastInput, transform: b2Transform): boolean;
+  public Set(other: b2Shape): void;
+  public Set(points: b2Vec2, count: number): void;
+  // public SetAsArray(vertices: any[], vertexCount?: number): void;
+  public SetAsBox(hx: number, hy: number): void;
+  public SetAsEdge(v1: b2Vec2, b2: b2Vec2): void;
+  public SetAsOrientedBox(hx: number, hy: number, center?: b2Vec2, angle?: number): void;
+  public SetAsVector(vertices: any[], vertexCount?: number): void;
+  public TestPoint(xf: b2Transform, p: b2Vec2): boolean;
+}
+
+/**
+* This holds the mass data computed for a shape.
+**/
+declare class b2MassData {
+
+  /**
+  * The position of the shape's centroid relative to the shape's origin.
+  **/
+  public center: b2Vec2;
+
+  /**
+  * The rotational inertia of the shape. This may be about the center or local origin, depending on usage.
+  **/
+  public I: number;
+
+  /**
+  * The mass of the shape, usually in kilograms.
+  **/
+  public mass: number;
 }

@@ -66,7 +66,7 @@ var emptyController = function () {
 function startGame(networkConnection) {
     var world = new GameWorld();
     var canvas = document.createElement("canvas");
-    canvas.width = 500;
+    canvas.width = 1000;
     canvas.height = 500;
     document.body.appendChild(canvas);
     var ctx = canvas.getContext("2d");
@@ -74,7 +74,6 @@ function startGame(networkConnection) {
         throw new Error("No ctx");
     }
     ctx.scale(10, 10);
-    // ctx?.scale()
     var controller = emptyController();
     document.addEventListener("keydown", function (e) {
         switch (e.keyCode) {
@@ -120,7 +119,7 @@ function startGame(networkConnection) {
             case "Host": {
                 for (var i = 0; i < numSteps; i++) {
                     frameCount++;
-                    var ship = world.getShipById(networkConnection.shipId);
+                    var ship = world.getCharacterById(networkConnection.shipId);
                     if (ship === undefined) {
                         throw new Error("Big issue");
                     }
@@ -129,13 +128,23 @@ function startGame(networkConnection) {
                     if (frameCount % FRAMES_PER_PACKET === 0) {
                         var packet = {
                             frameNumber: frameCount,
-                            ships: world.ships.map(function (ship) {
+                            characterSnapshots: world.characters.map(function (character) {
                                 return {
-                                    shipId: ship.id,
-                                    x: ship.x,
-                                    y: ship.y,
-                                    velx: ship.velx,
-                                    vely: ship.vely
+                                    id: character.id,
+                                    posx: character.body.GetPosition().x,
+                                    posy: character.body.GetPosition().y,
+                                    velx: character.body.GetLinearVelocity().x,
+                                    vely: character.body.GetLinearVelocity().y
+                                };
+                            }),
+                            createSnapshots: world.crates.map(function (crate) {
+                                return {
+                                    angle: crate.body.GetAngle(),
+                                    angularVel: crate.body.GetAngularVelocity(),
+                                    posx: crate.body.GetPosition().x,
+                                    posy: crate.body.GetPosition().y,
+                                    velx: crate.body.GetLinearVelocity().x,
+                                    vely: crate.body.GetLinearVelocity().y
                                 };
                             })
                         };
@@ -150,7 +159,7 @@ function startGame(networkConnection) {
             case "Client": {
                 for (var i = 0; i < numSteps; i++) {
                     frameCount++;
-                    var ship = world.getShipById(networkConnection.shipId);
+                    var ship = world.getCharacterById(networkConnection.shipId);
                     if (ship === undefined) {
                         throw new Error("Big issue");
                     }
@@ -181,12 +190,12 @@ function startGame(networkConnection) {
             var _loop_1 = function (client) {
                 client.dataConnection.on("data", function (data) {
                     var packet = data;
-                    var ship = world.getShipById(client.shipId);
-                    if (ship === undefined) {
+                    var character = world.getCharacterById(client.shipId);
+                    if (character === undefined) {
                         throw new Error("Impssoible");
                     }
                     console.log(packet);
-                    ship.futureInputs = ship.futureInputs.concat(packet.inputArray);
+                    character.futureInputs = character.futureInputs.concat(packet.inputArray);
                 });
             };
             for (var _i = 0, _a = networkConnection.clients; _i < _a.length; _i++) {
@@ -200,16 +209,21 @@ function startGame(networkConnection) {
                 networkConnection.server.on("data", function (data) {
                     var packet = data;
                     console.log('server data', data);
-                    for (var _i = 0, _a = packet.ships; _i < _a.length; _i++) {
-                        var shipPacket = _a[_i];
-                        var ship = world.getShipById(shipPacket.shipId);
-                        if (ship === undefined) {
+                    for (var _i = 0, _a = packet.characterSnapshots; _i < _a.length; _i++) {
+                        var snapshot = _a[_i];
+                        var character = world.getCharacterById(snapshot.id);
+                        if (character === undefined) {
                             throw new Error("impossible..");
                         }
-                        ship.x = shipPacket.x;
-                        ship.y = shipPacket.y;
-                        ship.velx = shipPacket.velx;
-                        ship.vely = shipPacket.vely;
+                        character.body.SetTransform(new b2Vec2(snapshot.posx, snapshot.posy), 0);
+                        character.body.SetLinearVelocity(new b2Vec2(snapshot.velx, snapshot.vely));
+                    }
+                    for (var i = 0; i < world.crates.length; i++) {
+                        var crateSnapshot = packet.createSnapshots[i];
+                        var crate = world.crates[i];
+                        crate.body.SetTransform(new b2Vec2(crateSnapshot.posx, crateSnapshot.posy), crateSnapshot.angle);
+                        crate.body.SetLinearVelocity(new b2Vec2(crateSnapshot.velx, crateSnapshot.vely));
+                        crate.body.SetAngularVelocity(crateSnapshot.angularVel);
                     }
                 });
             }
@@ -219,6 +233,84 @@ function startGame(networkConnection) {
 }
 var GAME_WIDTH = 500;
 var GAME_HEIGHT = 500;
+var Crate = /** @class */ (function () {
+    function Crate(world) {
+        this.width = 3;
+        this.height = 3;
+        var bodyDef = new b2BodyDef();
+        bodyDef.allowSleep = false;
+        bodyDef.set_type(b2_dynamicBody);
+        bodyDef.position.Set(Math.random() * 100, 20);
+        this.body = world.CreateBody(bodyDef);
+        var shape = new b2PolygonShape();
+        shape.SetAsBox(this.width, this.height);
+        var fixt = this.body.CreateFixture(shape, 0.1);
+        fixt.SetRestitution(0.9);
+        fixt.SetFriction(0);
+    }
+    Crate.prototype.render = function (ctx) {
+        var x = this.body.GetPosition().x;
+        var y = this.body.GetPosition().y;
+        ctx.translate(x, y);
+        ctx.rotate(this.body.GetAngle());
+        ctx.fillStyle = "red";
+        ctx.fillRect(-this.width, -this.height, this.width * 2, this.height * 2);
+        ctx.rotate(-this.body.GetAngle());
+        ctx.translate(-x, -y);
+    };
+    return Crate;
+}());
+var Character = /** @class */ (function () {
+    function Character(id, world) {
+        this.radius = 3;
+        /**
+         * Only used on host
+         */
+        this.futureInputs = [];
+        this.id = id;
+        var bodyDef = new b2BodyDef();
+        bodyDef.allowSleep = false;
+        bodyDef.fixedRotation = true;
+        bodyDef.set_type(b2_dynamicBody);
+        bodyDef.position.Set(Math.random() * 25, Math.random() * 25);
+        this.body = world.CreateBody(bodyDef);
+        var shape = new b2CircleShape();
+        shape.set_m_radius(this.radius);
+        this.body.CreateFixture(shape, 0.1);
+    }
+    Character.prototype.step = function (contoller) {
+        if (contoller.upKey) {
+            this.move(0, -1);
+        }
+        else if (contoller.downKey) {
+            this.move(0, 1);
+        }
+        if (contoller.leftKey) {
+            this.move(-1, 0);
+        }
+        else if (contoller.rightKey) {
+            this.move(1, 0);
+        }
+    };
+    Character.prototype.move = function (x, y) {
+        var vec = new b2Vec2(x * 100, y * 200);
+        this.body.ApplyForceToCenter(vec);
+    };
+    Character.prototype.jump = function () {
+        var vec = new b2Vec2(0, -10);
+        this.body.ApplyLinearImpulse(vec, this.body.GetPosition());
+    };
+    Character.prototype.render = function (ctx) {
+        ctx.beginPath();
+        ctx.arc(this.body.GetPosition().x, this.body.GetPosition().y, this.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        if (this.id === 0) {
+            ctx.fillStyle = "blue";
+            ctx.fill();
+        }
+    };
+    return Character;
+}());
 var Ship = /** @class */ (function () {
     function Ship(id) {
         this.radius = 30;
@@ -292,96 +384,105 @@ var elasticCollision = function (normalX, normalY, velX, velY) {
 };
 window.Box2D().then(function (box2D) {
     console.log("Box2D - INIT");
+    var names = ["b2Vec2",
+        "b2World",
+        "b2_dynamicBody",
+        "b2BodyDef",
+        "b2_staticBody",
+        "b2_kinematicBody",
+        "b2CircleShape",
+        "b2EdgeShape",
+        "b2FixtureDef",
+        "b2Transform",
+        "b2Mat22",
+        "b2Shape",
+        "b2ChainShape",
+        "b2PolygonShape"
+    ];
     window.box2D = box2D;
-    window.b2Vec2 = box2D.b2Vec2;
-    window.b2World = box2D.b2World;
-    window.b2_dynamicBody = box2D.b2_dynamicBody;
-    window.b2BodyDef = box2D.b2BodyDef;
-    window.b2_staticBody = box2D.b2_staticBody;
-    window.b2_kinematicBody = box2D.b2_kinematicBody;
-    window.b2CircleShape = box2D.b2CircleShape;
-    window.b2EdgeShape = box2D.b2EdgeShape;
-    window.b2FixtureDef = box2D.b2FixtureDef;
-    window.b2Transform = box2D.b2Transform;
-    window.b2Mat22 = box2D.b2Mat22;
+    for (var _i = 0, names_1 = names; _i < names_1.length; _i++) {
+        var name_1 = names_1[_i];
+        window[name_1] = box2D[name_1];
+    }
+    // singlePlayerHost();
 });
 var GameWorld = /** @class */ (function () {
     function GameWorld() {
         this.ships = [new Ship(0), new Ship(1)];
+        this.crates = [];
         this.world = new b2World(new b2Vec2(0, 30), true);
+        for (var i = 0; i < 10; i++) {
+            this.crates.push(new Crate(this.world));
+        }
         // circle
         var bodyDef = new b2BodyDef();
         bodyDef.set_type(b2_dynamicBody);
         bodyDef.position.Set(20, 20);
         bodyDef.linearDamping = 0;
         bodyDef.angularDamping = 0;
-        this.dynamicBody = this.world.CreateBody(bodyDef);
-        var circleShape = new b2CircleShape();
-        circleShape.set_m_radius(1);
-        var fixt = this.dynamicBody.CreateFixture(circleShape, 1.0);
-        fixt.SetRestitution(0.2);
+        this.characters = [new Character(0, this.world), new Character(1, this.world)];
         // ground
-        this.groundBody = this.world.CreateBody(new b2BodyDef());
-        var edgeShape = new b2EdgeShape();
-        edgeShape.Set(new b2Vec2(0, 40), new b2Vec2(50, 30));
+        var vertices = [
+            new b2Vec2(0, 0),
+            new b2Vec2(0, 35),
+            new b2Vec2(5, 40),
+            new b2Vec2(25, 40),
+            new b2Vec2(50, 50),
+            new b2Vec2(70, 50),
+            new b2Vec2(80, 45),
+            new b2Vec2(100, 40),
+            new b2Vec2(100, 0),
+            new b2Vec2(0, 0),
+        ];
+        var groundBody = this.world.CreateBody(new b2BodyDef());
         var fixtureDef = new b2FixtureDef();
-        fixtureDef.set_shape(edgeShape);
         fixtureDef.restitution = 0.2;
-        this.groundBody.CreateFixture(fixtureDef);
+        this.groundBody = new RigidBody(groundBody);
+        this.groundBody.addChain(fixtureDef, vertices);
     }
-    GameWorld.prototype.getShipById = function (id) {
-        for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
-            var ship = _a[_i];
-            if (ship.id === id) {
-                return ship;
+    GameWorld.prototype.getCharacterById = function (id) {
+        for (var _i = 0, _a = this.characters; _i < _a.length; _i++) {
+            var character = _a[_i];
+            if (character.id === id) {
+                return character;
             }
         }
     };
     GameWorld.prototype.step = function () {
-        for (var _i = 0, _a = this.ships; _i < _a.length; _i++) {
-            var ship = _a[_i];
-            if (ship.futureInputs.length === 0) {
-                ship.step(emptyController());
+        for (var _i = 0, _a = this.characters; _i < _a.length; _i++) {
+            var character = _a[_i];
+            if (character.futureInputs.length === 0) {
+                character.step(emptyController());
             }
             else {
-                // ship.step(ship.futureInputs[0]);
-                if (ship.futureInputs[0].leftKey) {
-                    this.dynamicBody.ApplyForce(new b2Vec2(-100, 0), this.dynamicBody.GetPosition());
-                }
-                if (ship.futureInputs[0].rightKey) {
-                    this.dynamicBody.ApplyForce(new b2Vec2(100, 0), this.dynamicBody.GetPosition());
-                }
-                if (ship.futureInputs[0].upKey) {
-                    this.dynamicBody.ApplyForce(new b2Vec2(0, -100), this.dynamicBody.GetPosition());
-                }
-                if (ship.futureInputs[0].downKey) {
-                    this.dynamicBody.ApplyForce(new b2Vec2(0, 100), this.dynamicBody.GetPosition());
-                }
-                ship.futureInputs.shift();
+                character.step(character.futureInputs[0]);
+                character.futureInputs.shift();
             }
         }
-        this.world.Step(FRAME_TIME / 1000, 8, 3);
+        this.world.Step(FRAME_TIME / 1000, 10, 8);
     };
     GameWorld.prototype.render = function (ctx) {
         ctx.fillStyle = "#cccccc";
-        ctx.fillRect(0, 0, 50, 50);
+        ctx.fillRect(0, 0, 100, 50);
         ctx.beginPath();
-        console.log(this.groundBody.GetFixtureList());
-        ctx.moveTo(0, 40);
-        ctx.lineTo(50, 30);
+        for (var _i = 0, _a = this.groundBody.chains; _i < _a.length; _i++) {
+            var chain = _a[_i];
+            ctx.moveTo(chain.vertices[0].x, chain.vertices[0].y);
+            for (var _b = 0, _c = chain.vertices; _b < _c.length; _b++) {
+                var vert = _c[_b];
+                ctx.lineTo(vert.x, vert.y);
+            }
+        }
+        for (var _d = 0, _e = this.crates; _d < _e.length; _d++) {
+            var crate = _e[_d];
+            crate.render(ctx);
+        }
+        ctx.lineWidth = 0.1;
         ctx.stroke();
-        // for (const ship of this.ships) {
-        //   ship.render(ctx);
-        // }
-        // Box2D stuff:
-        var x = this.dynamicBody.GetPosition().x;
-        var y = this.dynamicBody.GetPosition().y;
-        ctx.translate(x, y);
-        ctx.rotate(this.dynamicBody.GetAngle());
-        ctx.fillStyle = "red";
-        ctx.fillRect(-0.5, -0.5, 1, 1);
-        ctx.rotate(-this.dynamicBody.GetAngle());
-        ctx.translate(-x, -y);
+        for (var _f = 0, _g = this.characters; _f < _g.length; _f++) {
+            var character = _g[_f];
+            character.render(ctx);
+        }
     };
     return GameWorld;
 }());
