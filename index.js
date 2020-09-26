@@ -21,24 +21,35 @@ function hostServer(idCallback) {
         }
         var connection = peer.connect(clientId, WEBRTC_OPTIONS);
         console.log("connection:", connection);
+        var connections = [];
         connection.on("open", function () {
+            connections.push({ dataConnection: connection, id: connections.length + 1 });
             console.log("open event");
-            startGame({
-                type: "Host",
-                clients: [{ dataConnection: connection, shipId: 1 }],
-                shipId: 0
-            });
+            if (connections.length === 2) {
+                startGame({
+                    type: "Host",
+                    clients: connections,
+                    shipId: 0
+                });
+            }
+            else {
+                var clientId2 = null;
+                while (clientId2 === null) {
+                    clientId2 = prompt("Copy selected text\nEnter client id", id);
+                    console.log("clientId", clientId2);
+                }
+            }
         });
     });
 }
 // Main function for client
-function connectToServer(id) {
+function connectToServer(peerId, characterId) {
     console.log("CLIENT");
     var peer = new Peer();
     peer.on("error", function (err) {
         console.log("ERROR", err);
     });
-    peer.connect(id, WEBRTC_OPTIONS);
+    peer.connect(peerId, WEBRTC_OPTIONS);
     peer.on("open", function (id) {
         console.log("open", id);
         prompt('give to server:', id);
@@ -50,7 +61,7 @@ function connectToServer(id) {
             startGame({
                 type: "Client",
                 server: conn,
-                shipId: 1
+                shipId: characterId
             });
         });
     });
@@ -121,7 +132,7 @@ function startGame(networkConnection) {
                     frameCount++;
                     var ship = world.getCharacterById(networkConnection.shipId);
                     if (ship === undefined) {
-                        throw new Error("Big issue");
+                        throw new Error("Big issue " + networkConnection.shipId);
                     }
                     ship.futureInputs = [controller];
                     world.step();
@@ -161,7 +172,7 @@ function startGame(networkConnection) {
                     frameCount++;
                     var ship = world.getCharacterById(networkConnection.shipId);
                     if (ship === undefined) {
-                        throw new Error("Big issue");
+                        throw new Error("Big issue " + networkConnection.shipId);
                     }
                     ship.futureInputs = [controller];
                     world.step();
@@ -190,7 +201,7 @@ function startGame(networkConnection) {
             var _loop_1 = function (client) {
                 client.dataConnection.on("data", function (data) {
                     var packet = data;
-                    var character = world.getCharacterById(client.shipId);
+                    var character = world.getCharacterById(client.id);
                     if (character === undefined) {
                         throw new Error("Impssoible");
                     }

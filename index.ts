@@ -24,26 +24,35 @@ function hostServer(idCallback: (id: string) => void): void {
 
     const connection = peer.connect(clientId, WEBRTC_OPTIONS);
     console.log("connection:", connection);
-
+    let connections: HostPeer[] = []
     connection.on("open", () => {
+      connections.push({ dataConnection: connection, id: connections.length + 1 });
       console.log("open event");
-      startGame({
-        type: "Host",
-        clients: [{ dataConnection: connection, shipId: 1 }],
-        shipId: 0
-      });
+      if (connections.length === 2) {
+        startGame({
+          type: "Host",
+          clients: connections,
+          shipId: 0
+        });
+      } else {
+        let clientId2 = null
+        while (clientId2 === null) {
+          clientId2 = prompt(`Copy selected text\nEnter client id`, id);
+          console.log("clientId", clientId2);
+        }
+      }
     });
   });
 }
 
 // Main function for client
-function connectToServer(id: string): void {
+function connectToServer(peerId: string, characterId: number): void {
   console.log("CLIENT");
   const peer = new Peer();
   peer.on("error", (err: any) => {
     console.log("ERROR", err);
   });
-  peer.connect(id, WEBRTC_OPTIONS);
+  peer.connect(peerId, WEBRTC_OPTIONS);
   peer.on("open", (id: string) => {
     console.log("open", id);
     prompt('give to server:', id)
@@ -57,7 +66,7 @@ function connectToServer(id: string): void {
       startGame({
         type: "Client",
         server: conn,
-        shipId: 1
+        shipId: characterId
       });
     });
   });
@@ -73,7 +82,7 @@ interface Controller {
 type NetworkConnection = NetworkConnection.Host | NetworkConnection.Client;
 interface HostPeer {
   dataConnection: Peer.DataConnection;
-  shipId: number;
+  id: number;
 }
 namespace NetworkConnection {
   export interface Host {
@@ -188,7 +197,7 @@ function startGame(networkConnection: NetworkConnection) {
           frameCount++;
           const ship = world.getCharacterById(networkConnection.shipId);
           if (ship === undefined) {
-            throw new Error("Big issue");
+            throw new Error("Big issue " + networkConnection.shipId);
           }
           ship.futureInputs = [controller];
 
@@ -229,7 +238,7 @@ function startGame(networkConnection: NetworkConnection) {
           frameCount++;
           const ship = world.getCharacterById(networkConnection.shipId);
           if (ship === undefined) {
-            throw new Error("Big issue");
+            throw new Error("Big issue " + networkConnection.shipId);
           }
           ship.futureInputs = [controller];
           world.step();
@@ -258,10 +267,10 @@ function startGame(networkConnection: NetworkConnection) {
   switch (networkConnection.type) {
     case "Host": {
       for (const client of networkConnection.clients) {
-        client.dataConnection.on("data", (data) => {
+        client.dataConnection.on("data", (data: any) => {
           const packet: ClientToHost = data;
 
-          const character = world.getCharacterById(client.shipId);
+          const character = world.getCharacterById(client.id);
           if (character === undefined) {
             throw new Error("Impssoible");
           }

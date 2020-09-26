@@ -16,8 +16,9 @@
   <div><button onclick="singlePlayerClient()">Single client</button></div>
   <div><button onclick="singlePlayerHost()">Single host</button></div>
   <div>
-    <input id='SERVER_ID' type='text' placeholder="Server id"/>
-    <button onclick="connectToServer(document.getElementById('SERVER_ID').textContent)">Join server</button>
+    <input id='SERVER_ID' type='text' placeholder="Server id" />
+    <button onclick="connectToServer(document.getElementById('SERVER_ID').textContent, 1)">Join server 1</button>
+    <button onclick="connectToServer(document.getElementById('SERVER_ID').textContent, 2)">Join server 2</button>
   </div>
 </body>
 
