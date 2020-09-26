@@ -277,6 +277,7 @@ var Character = /** @class */ (function () {
         var shape = new b2CircleShape();
         shape.set_m_radius(this.radius);
         this.body.CreateFixture(shape, 0.1);
+        this.body.SetLinearDamping(7);
     }
     Character.prototype.step = function (contoller) {
         if (contoller.upKey) {
@@ -293,7 +294,7 @@ var Character = /** @class */ (function () {
         }
     };
     Character.prototype.move = function (x, y) {
-        var vec = new b2Vec2(x * 100, y * 200);
+        var vec = new b2Vec2(x * 1000, y * 1000);
         this.body.ApplyForceToCenter(vec);
     };
     Character.prototype.jump = function () {

@@ -350,6 +350,7 @@ class Character {
     const shape = new b2CircleShape();
     shape.set_m_radius(this.radius);
     this.body.CreateFixture(shape, 0.1);
+    this.body.SetLinearDamping(7);
   }
 
   step(contoller: Controller) {
@@ -363,9 +364,10 @@ class Character {
     } else if (contoller.rightKey) {
       this.move(1, 0);
     }
+
   }
   move(x: number, y: number) {
-    const vec = new b2Vec2(x * 100, y * 200);
+    const vec = new b2Vec2(x * 1000, y * 1000);
     this.body.ApplyForceToCenter(vec);
   }
   jump() {
