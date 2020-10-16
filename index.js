@@ -3,8 +3,8 @@ var WEBRTC_OPTIONS = {
     serialization: "json"
 };
 var FRAME_TIME = 1 / 60 * 1000;
+// Maybe split server and client frames per packet
 var FRAMES_PER_PACKET = 2;
-// Main function for server host
 function hostServer(idCallback) {
     console.log("SERVER");
     var peer = new Peer();
@@ -109,7 +109,9 @@ function startGame(networkConnection) {
     });
     var frameCount = 0;
     var gameStartedTime;
+    var clientControllerPacket = [];
     var clientControllerHistory = [];
+    var clientControllerId;
     var frame = function (time) {
         var _a;
         var currTime = time - gameStartedTime;
@@ -119,37 +121,45 @@ function startGame(networkConnection) {
             case "Host": {
                 for (var i = 0; i < numSteps; i++) {
                     frameCount++;
-                    var ship = world.getCharacterById(networkConnection.shipId);
-                    if (ship === undefined) {
+                    var character = world.getCharacterById(networkConnection.shipId);
+                    if (character === undefined) {
                         throw new Error("Big issue");
                     }
-                    ship.futureInputs = [controller];
+                    // ID gets ignored
+                    character.futureInputs = [{ id: 0, controller: controller }];
                     world.step();
                     if (frameCount % FRAMES_PER_PACKET === 0) {
-                        var packet = {
-                            frameNumber: frameCount,
-                            characterSnapshots: world.characters.map(function (character) {
-                                return {
-                                    id: character.id,
-                                    posx: character.body.GetPosition().x,
-                                    posy: character.body.GetPosition().y,
-                                    velx: character.body.GetLinearVelocity().x,
-                                    vely: character.body.GetLinearVelocity().y
-                                };
-                            }),
-                            createSnapshots: world.crates.map(function (crate) {
-                                return {
-                                    angle: crate.body.GetAngle(),
-                                    angularVel: crate.body.GetAngularVelocity(),
-                                    posx: crate.body.GetPosition().x,
-                                    posy: crate.body.GetPosition().y,
-                                    velx: crate.body.GetLinearVelocity().x,
-                                    vely: crate.body.GetLinearVelocity().y
-                                };
-                            })
-                        };
+                        var characterSnapshots = world.characters.map(function (character) {
+                            return {
+                                id: character.id,
+                                posx: character.body.GetPosition().x,
+                                posy: character.body.GetPosition().y,
+                                velx: character.body.GetLinearVelocity().x,
+                                vely: character.body.GetLinearVelocity().y
+                            };
+                        });
+                        var crateSnapshots = world.crates.map(function (crate) {
+                            return {
+                                angle: crate.body.GetAngle(),
+                                angularVel: crate.body.GetAngularVelocity(),
+                                posx: crate.body.GetPosition().x,
+                                posy: crate.body.GetPosition().y,
+                                velx: crate.body.GetLinearVelocity().x,
+                                vely: crate.body.GetLinearVelocity().y
+                            };
+                        });
                         for (var _i = 0, _b = networkConnection.clients; _i < _b.length; _i++) {
                             var client = _b[_i];
+                            var clientChar = world.getCharacterById(client.shipId);
+                            if (clientChar === undefined) {
+                                throw new Error("Cant find client: " + client.shipId);
+                            }
+                            var packet = {
+                                frameNumber: frameCount,
+                                controllerPacketId: clientChar.lastAppliedInputId,
+                                characterSnapshots: characterSnapshots,
+                                crateSnapshots: crateSnapshots
+                            };
                             client.dataConnection.send(packet);
                         }
                     }
@@ -163,15 +173,18 @@ function startGame(networkConnection) {
                     if (ship === undefined) {
                         throw new Error("Big issue");
                     }
-                    ship.futureInputs = [controller];
+                    var controllerPacket = { id: clientControllerId, controller: controller };
+                    ship.futureInputs = [controllerPacket];
                     world.step();
-                    clientControllerHistory.push(controller);
-                    if (clientControllerHistory.length === FRAMES_PER_PACKET) {
+                    clientControllerHistory.push(controllerPacket);
+                    clientControllerPacket.push(controllerPacket);
+                    clientControllerId++;
+                    if (clientControllerPacket.length === FRAMES_PER_PACKET) {
                         var packet = {
-                            inputArray: clientControllerHistory
+                            inputArray: clientControllerPacket
                         };
                         (_a = networkConnection.server) === null || _a === void 0 ? void 0 : _a.send(packet);
-                        clientControllerHistory = [];
+                        clientControllerPacket = [];
                     }
                 }
                 break;
@@ -219,12 +232,24 @@ function startGame(networkConnection) {
                         character.body.SetLinearVelocity(new b2Vec2(snapshot.velx, snapshot.vely));
                     }
                     for (var i = 0; i < world.crates.length; i++) {
-                        var crateSnapshot = packet.createSnapshots[i];
+                        var crateSnapshot = packet.crateSnapshots[i];
                         var crate = world.crates[i];
                         crate.body.SetTransform(new b2Vec2(crateSnapshot.posx, crateSnapshot.posy), crateSnapshot.angle);
                         crate.body.SetLinearVelocity(new b2Vec2(crateSnapshot.velx, crateSnapshot.vely));
                         crate.body.SetAngularVelocity(crateSnapshot.angularVel);
                     }
+                    // while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
+                    //   clientControllerHistory.shift();
+                    // }
+                    // const character = world.getCharacterById(networkConnection.shipId)
+                    // if (character === undefined) {
+                    //   throw new Error("Ship id not found " + networkConnection.shipId)
+                    // }
+                    // console.log(clientControllerHistory.length);
+                    // for (const history of clientControllerHistory) {
+                    //   character.futureInputs = [history];
+                    //   world.step();
+                    // }
                 });
             }
             break;
@@ -267,6 +292,7 @@ var Character = /** @class */ (function () {
          * Only used on host
          */
         this.futureInputs = [];
+        this.lastAppliedInputId = 0;
         this.id = id;
         var bodyDef = new b2BodyDef();
         bodyDef.allowSleep = false;
@@ -312,62 +338,6 @@ var Character = /** @class */ (function () {
     };
     return Character;
 }());
-var Ship = /** @class */ (function () {
-    function Ship(id) {
-        this.radius = 30;
-        this.x = 30;
-        this.y = 30;
-        this.velx = 0;
-        this.vely = 0;
-        /**
-         * Only used on host
-         */
-        this.futureInputs = [];
-        this.id = id;
-        this.x += this.x * id;
-        this.y += this.y * id;
-    }
-    Ship.prototype.step = function (controller) {
-        if (controller.rightKey) {
-            this.velx += 0.2;
-        }
-        if (controller.leftKey) {
-            this.velx -= 0.2;
-        }
-        if (controller.upKey) {
-            this.vely -= 0.2;
-        }
-        if (controller.downKey) {
-            this.vely += 0.2;
-        }
-        this.velx *= 0.98;
-        this.vely *= 0.98;
-        this.x += this.velx;
-        this.y += this.vely;
-        if (this.x > GAME_WIDTH - this.radius && this.velx > 0) {
-            this.velx *= -1;
-            this.x = GAME_WIDTH - this.radius;
-        }
-        if (this.y > GAME_HEIGHT - this.radius && this.vely > 0) {
-            this.vely *= -1;
-            this.y = GAME_HEIGHT - this.radius;
-        }
-        if (this.x < this.radius && this.velx < 0) {
-            this.velx *= -1;
-            this.x = this.radius;
-        }
-        if (this.y < this.radius && this.vely < 0) {
-            this.vely *= -1;
-            this.y = this.radius;
-        }
-    };
-    Ship.prototype.render = function (ctx) {
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 30, 0, Math.PI * 2);
-        ctx.stroke();
-    };
-    return Ship;
-}());
 var VectorLength = function (x, y) {
     return Math.sqrt(x * x + y * y);
 };
@@ -409,7 +379,6 @@ window.Box2D().then(function (box2D) {
 });
 var GameWorld = /** @class */ (function () {
     function GameWorld() {
-        this.ships = [new Ship(0), new Ship(1)];
         this.crates = [];
         this.world = new b2World(new b2Vec2(0, 30), true);
         for (var i = 0; i < 10; i++) {
@@ -456,7 +425,8 @@ var GameWorld = /** @class */ (function () {
                 character.step(emptyController());
             }
             else {
-                character.step(character.futureInputs[0]);
+                character.step(character.futureInputs[0].controller);
+                character.lastAppliedInputId = character.futureInputs[0].id;
                 character.futureInputs.shift();
             }
         }

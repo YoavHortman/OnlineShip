@@ -3,9 +3,9 @@ const WEBRTC_OPTIONS: Peer.PeerConnectOption = {
 };
 
 const FRAME_TIME = 1 / 60 * 1000;
+// Maybe split server and client frames per packet
 const FRAMES_PER_PACKET = 2;
 
-// Main function for server host
 function hostServer(idCallback: (id: string) => void): void {
   console.log("SERVER");
   const peer = new Peer();
@@ -108,16 +108,23 @@ interface CrateSnapshot {
 }
 
 interface HostToClient {
+  // remove?
   frameNumber: number;
-  createSnapshots: CrateSnapshot[];
+
+  controllerPacketId: number;
+  crateSnapshots: CrateSnapshot[];
   characterSnapshots: CharacterSnapshot[];
 }
 
+interface ControllerPacket {
+  id: number;
+  controller: Controller;
+}
 interface ClientToHost {
   /**
    * Length should be equalt to FRAMES_PER_PACKET
    */
-  inputArray: Controller[];
+  inputArray: ControllerPacket[];
 }
 
 const emptyController = (): Controller => {
@@ -177,7 +184,9 @@ function startGame(networkConnection: NetworkConnection) {
 
   let frameCount = 0;
   let gameStartedTime: number;
-  let clientControllerHistory: Controller[] = []
+  let clientControllerPacket: ControllerPacket[] = [];
+  let clientControllerHistory: ControllerPacket[] = [];
+  let clientControllerId: number;
   const frame = (time: number) => {
     const currTime = time - gameStartedTime;
     const msSinceStep = currTime - frameCount * FRAME_TIME;
@@ -186,38 +195,46 @@ function startGame(networkConnection: NetworkConnection) {
       case "Host": {
         for (let i = 0; i < numSteps; i++) {
           frameCount++;
-          const ship = world.getCharacterById(networkConnection.shipId);
-          if (ship === undefined) {
+          const character = world.getCharacterById(networkConnection.shipId);
+          if (character === undefined) {
             throw new Error("Big issue");
           }
-          ship.futureInputs = [controller];
+          // ID gets ignored
+          character.futureInputs = [{ id: 0, controller }];
 
           world.step();
 
           if (frameCount % FRAMES_PER_PACKET === 0) {
-            const packet: HostToClient = {
-              frameNumber: frameCount,
-              characterSnapshots: world.characters.map((character) => {
-                return {
-                  id: character.id,
-                  posx: character.body.GetPosition().x,
-                  posy: character.body.GetPosition().y,
-                  velx: character.body.GetLinearVelocity().x,
-                  vely: character.body.GetLinearVelocity().y,
-                }
-              }),
-              createSnapshots: world.crates.map((crate) => {
-                return {
-                  angle: crate.body.GetAngle(),
-                  angularVel: crate.body.GetAngularVelocity(),
-                  posx: crate.body.GetPosition().x,
-                  posy: crate.body.GetPosition().y,
-                  velx: crate.body.GetLinearVelocity().x,
-                  vely: crate.body.GetLinearVelocity().y,
-                }
-              })
-            };
+            const characterSnapshots = world.characters.map((character) => {
+              return {
+                id: character.id,
+                posx: character.body.GetPosition().x,
+                posy: character.body.GetPosition().y,
+                velx: character.body.GetLinearVelocity().x,
+                vely: character.body.GetLinearVelocity().y,
+              }
+            })
+            const crateSnapshots = world.crates.map((crate) => {
+              return {
+                angle: crate.body.GetAngle(),
+                angularVel: crate.body.GetAngularVelocity(),
+                posx: crate.body.GetPosition().x,
+                posy: crate.body.GetPosition().y,
+                velx: crate.body.GetLinearVelocity().x,
+                vely: crate.body.GetLinearVelocity().y,
+              }
+            });
             for (const client of networkConnection.clients) {
+              const clientChar = world.getCharacterById(client.shipId)
+              if (clientChar === undefined) {
+                throw new Error("Cant find client: " + client.shipId);
+              }
+              const packet: HostToClient = {
+                frameNumber: frameCount,
+                controllerPacketId: clientChar.lastAppliedInputId,
+                characterSnapshots: characterSnapshots,
+                crateSnapshots: crateSnapshots
+              };
               client.dataConnection.send(packet);
             }
           }
@@ -231,15 +248,18 @@ function startGame(networkConnection: NetworkConnection) {
           if (ship === undefined) {
             throw new Error("Big issue");
           }
-          ship.futureInputs = [controller];
+          const controllerPacket = { id: clientControllerId, controller };
+          ship.futureInputs = [controllerPacket];
           world.step();
-          clientControllerHistory.push(controller);
-          if (clientControllerHistory.length === FRAMES_PER_PACKET) {
+          clientControllerHistory.push(controllerPacket);
+          clientControllerPacket.push(controllerPacket);
+          clientControllerId++;
+          if (clientControllerPacket.length === FRAMES_PER_PACKET) {
             const packet: ClientToHost = {
-              inputArray: clientControllerHistory
+              inputArray: clientControllerPacket
             };
             networkConnection.server?.send(packet);
-            clientControllerHistory = [];
+            clientControllerPacket = [];
           }
         }
         break;
@@ -273,8 +293,8 @@ function startGame(networkConnection: NetworkConnection) {
     }
     case "Client": {
       if (networkConnection.server !== null) {
-        networkConnection.server.on("data", (data) => {
-          const packet: HostToClient = data;
+        networkConnection.server.on("data", (data: unknown) => {
+          const packet: HostToClient = data as any;
           console.log('server data', data)
           for (const snapshot of packet.characterSnapshots) {
             const character = world.getCharacterById(snapshot.id);
@@ -285,12 +305,24 @@ function startGame(networkConnection: NetworkConnection) {
             character.body.SetLinearVelocity(new b2Vec2(snapshot.velx, snapshot.vely));
           }
           for (let i = 0; i < world.crates.length; i++) {
-            const crateSnapshot = packet.createSnapshots[i];
+            const crateSnapshot = packet.crateSnapshots[i];
             const crate = world.crates[i];
             crate.body.SetTransform(new b2Vec2(crateSnapshot.posx, crateSnapshot.posy), crateSnapshot.angle);
             crate.body.SetLinearVelocity(new b2Vec2(crateSnapshot.velx, crateSnapshot.vely));
             crate.body.SetAngularVelocity(crateSnapshot.angularVel);
           }
+          // while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
+          //   clientControllerHistory.shift();
+          // }
+          // const character = world.getCharacterById(networkConnection.shipId)
+          // if (character === undefined) {
+          //   throw new Error("Ship id not found " + networkConnection.shipId)
+          // }
+          // console.log(clientControllerHistory.length);
+          // for (const history of clientControllerHistory) {
+          //   character.futureInputs = [history];
+          //   world.step();
+          // }
         });
       }
       break;
@@ -336,8 +368,8 @@ class Character {
   /** 
    * Only used on host
    */
-  public futureInputs: Controller[] = [];
-
+  public futureInputs: ControllerPacket[] = [];
+  public lastAppliedInputId: number = 0;
 
   constructor(id: number, world: b2World) {
     this.id = id;
@@ -364,7 +396,6 @@ class Character {
     } else if (contoller.rightKey) {
       this.move(1, 0);
     }
-
   }
   move(x: number, y: number) {
     const vec = new b2Vec2(x * 1000, y * 1000);
@@ -382,72 +413,6 @@ class Character {
       ctx.fillStyle = "blue";
       ctx.fill();
     }
-  }
-}
-
-class Ship {
-  readonly id: number;
-
-  public radius: number = 30;
-
-  public x: number = 30;
-  public y: number = 30;
-  public velx: number = 0;
-  public vely: number = 0;
-
-  /** 
-   * Only used on host
-   */
-  public futureInputs: Controller[] = [];
-
-  constructor(id: number) {
-    this.id = id;
-    this.x += this.x * id;
-    this.y += this.y * id;
-  }
-
-  public step(controller: Controller) {
-    if (controller.rightKey) {
-      this.velx += 0.2;
-    }
-    if (controller.leftKey) {
-      this.velx -= 0.2;
-    }
-    if (controller.upKey) {
-      this.vely -= 0.2;
-    }
-    if (controller.downKey) {
-      this.vely += 0.2;
-    }
-
-    this.velx *= 0.98;
-    this.vely *= 0.98;
-
-    this.x += this.velx;
-    this.y += this.vely;
-
-    if (this.x > GAME_WIDTH - this.radius && this.velx > 0) {
-      this.velx *= -1;
-      this.x = GAME_WIDTH - this.radius;
-    }
-    if (this.y > GAME_HEIGHT - this.radius && this.vely > 0) {
-      this.vely *= -1;
-      this.y = GAME_HEIGHT - this.radius;
-    }
-    if (this.x < this.radius && this.velx < 0) {
-      this.velx *= -1;
-      this.x = this.radius;
-    }
-    if (this.y < this.radius && this.vely < 0) {
-      this.vely *= -1;
-      this.y = this.radius;
-    }
-  }
-
-  public render(ctx: CanvasRenderingContext2D) {
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, 30, 0, Math.PI * 2);
-    ctx.stroke();
   }
 }
 
@@ -497,7 +462,6 @@ const elasticCollision = (normalX: number, normalY: number, velX: number, velY: 
 })
 class GameWorld {
   crates: Crate[];
-  public ships: readonly Ship[] = [new Ship(0), new Ship(1)];
 
   characters: Character[];
   groundBody: RigidBody;
@@ -554,7 +518,8 @@ class GameWorld {
       if (character.futureInputs.length === 0) {
         character.step(emptyController());
       } else {
-        character.step(character.futureInputs[0]);
+        character.step(character.futureInputs[0].controller);
+        character.lastAppliedInputId = character.futureInputs[0].id;
         character.futureInputs.shift();
       }
     }
