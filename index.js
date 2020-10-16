@@ -111,7 +111,7 @@ function startGame(networkConnection) {
     var gameStartedTime;
     var clientControllerPacket = [];
     var clientControllerHistory = [];
-    var clientControllerId;
+    var clientControllerId = 1;
     var frame = function (time) {
         var _a;
         var currTime = time - gameStartedTime;
@@ -198,6 +198,7 @@ function startGame(networkConnection) {
         gameStartedTime = time;
         requestAnimationFrame(frame);
     });
+    var clientLastReceviedFrame = 0;
     switch (networkConnection.type) {
         case "Host": {
             var _loop_1 = function (client) {
@@ -221,15 +222,19 @@ function startGame(networkConnection) {
             if (networkConnection.server !== null) {
                 networkConnection.server.on("data", function (data) {
                     var packet = data;
+                    if (clientLastReceviedFrame > packet.frameNumber) {
+                        return;
+                    }
+                    clientLastReceviedFrame = packet.frameNumber;
                     console.log('server data', data);
                     for (var _i = 0, _a = packet.characterSnapshots; _i < _a.length; _i++) {
                         var snapshot = _a[_i];
-                        var character = world.getCharacterById(snapshot.id);
-                        if (character === undefined) {
+                        var character_1 = world.getCharacterById(snapshot.id);
+                        if (character_1 === undefined) {
                             throw new Error("impossible..");
                         }
-                        character.body.SetTransform(new b2Vec2(snapshot.posx, snapshot.posy), 0);
-                        character.body.SetLinearVelocity(new b2Vec2(snapshot.velx, snapshot.vely));
+                        character_1.body.SetTransform(new b2Vec2(snapshot.posx, snapshot.posy), 0);
+                        character_1.body.SetLinearVelocity(new b2Vec2(snapshot.velx, snapshot.vely));
                     }
                     for (var i = 0; i < world.crates.length; i++) {
                         var crateSnapshot = packet.crateSnapshots[i];
@@ -238,18 +243,22 @@ function startGame(networkConnection) {
                         crate.body.SetLinearVelocity(new b2Vec2(crateSnapshot.velx, crateSnapshot.vely));
                         crate.body.SetAngularVelocity(crateSnapshot.angularVel);
                     }
-                    // while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
-                    //   clientControllerHistory.shift();
-                    // }
-                    // const character = world.getCharacterById(networkConnection.shipId)
-                    // if (character === undefined) {
-                    //   throw new Error("Ship id not found " + networkConnection.shipId)
-                    // }
-                    // console.log(clientControllerHistory.length);
-                    // for (const history of clientControllerHistory) {
-                    //   character.futureInputs = [history];
-                    //   world.step();
-                    // }
+                    // console.log("history", clientControllerHistory[0].id, packet.controllerPacketId);
+                    // console.log("id", packet.controllerPacketId);
+                    while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
+                        console.log("shifted history");
+                        clientControllerHistory.shift();
+                    }
+                    var character = world.getCharacterById(networkConnection.shipId);
+                    if (character === undefined) {
+                        throw new Error("Ship id not found " + networkConnection.shipId);
+                    }
+                    console.log("history len", clientControllerHistory.length);
+                    for (var _b = 0, clientControllerHistory_1 = clientControllerHistory; _b < clientControllerHistory_1.length; _b++) {
+                        var history_1 = clientControllerHistory_1[_b];
+                        character.futureInputs = [history_1];
+                        world.step();
+                    }
                 });
             }
             break;

@@ -186,7 +186,7 @@ function startGame(networkConnection: NetworkConnection) {
   let gameStartedTime: number;
   let clientControllerPacket: ControllerPacket[] = [];
   let clientControllerHistory: ControllerPacket[] = [];
-  let clientControllerId: number;
+  let clientControllerId: number = 1;
   const frame = (time: number) => {
     const currTime = time - gameStartedTime;
     const msSinceStep = currTime - frameCount * FRAME_TIME;
@@ -275,6 +275,7 @@ function startGame(networkConnection: NetworkConnection) {
     gameStartedTime = time;
     requestAnimationFrame(frame);
   });
+  let clientLastReceviedFrame = 0;
   switch (networkConnection.type) {
     case "Host": {
       for (const client of networkConnection.clients) {
@@ -294,7 +295,12 @@ function startGame(networkConnection: NetworkConnection) {
     case "Client": {
       if (networkConnection.server !== null) {
         networkConnection.server.on("data", (data: unknown) => {
+          
           const packet: HostToClient = data as any;
+          if (clientLastReceviedFrame > packet.frameNumber) {
+            return;
+          }
+          clientLastReceviedFrame = packet.frameNumber;
           console.log('server data', data)
           for (const snapshot of packet.characterSnapshots) {
             const character = world.getCharacterById(snapshot.id);
@@ -311,18 +317,22 @@ function startGame(networkConnection: NetworkConnection) {
             crate.body.SetLinearVelocity(new b2Vec2(crateSnapshot.velx, crateSnapshot.vely));
             crate.body.SetAngularVelocity(crateSnapshot.angularVel);
           }
-          // while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
-          //   clientControllerHistory.shift();
-          // }
-          // const character = world.getCharacterById(networkConnection.shipId)
-          // if (character === undefined) {
-          //   throw new Error("Ship id not found " + networkConnection.shipId)
-          // }
-          // console.log(clientControllerHistory.length);
-          // for (const history of clientControllerHistory) {
-          //   character.futureInputs = [history];
-          //   world.step();
-          // }
+          
+          // console.log("history", clientControllerHistory[0].id, packet.controllerPacketId);
+          // console.log("id", packet.controllerPacketId);
+          while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
+            console.log("shifted history");
+            clientControllerHistory.shift();
+          }
+          const character = world.getCharacterById(networkConnection.shipId)
+          if (character === undefined) {
+            throw new Error("Ship id not found " + networkConnection.shipId)
+          }
+          console.log("history len", clientControllerHistory.length);
+          for (const history of clientControllerHistory) {
+            character.futureInputs = [history];
+            world.step();
+          }
         });
       }
       break;
