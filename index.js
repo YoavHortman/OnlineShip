@@ -243,10 +243,7 @@ function startGame(networkConnection) {
                         crate.body.SetLinearVelocity(new b2Vec2(crateSnapshot.velx, crateSnapshot.vely));
                         crate.body.SetAngularVelocity(crateSnapshot.angularVel);
                     }
-                    // console.log("history", clientControllerHistory[0].id, packet.controllerPacketId);
-                    // console.log("id", packet.controllerPacketId);
                     while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
-                        console.log("shifted history");
                         clientControllerHistory.shift();
                     }
                     var character = world.getCharacterById(networkConnection.shipId);

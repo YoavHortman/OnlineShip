@@ -248,7 +248,7 @@ function startGame(networkConnection: NetworkConnection) {
           if (ship === undefined) {
             throw new Error("Big issue");
           }
-          const controllerPacket = { id: clientControllerId, controller };
+          const controllerPacket = { id: clientControllerId, controller: controller };
           ship.futureInputs = [controllerPacket];
           world.step();
           clientControllerHistory.push(controllerPacket);
@@ -318,15 +318,12 @@ function startGame(networkConnection: NetworkConnection) {
             crate.body.SetAngularVelocity(crateSnapshot.angularVel);
           }
           
-          // console.log("history", clientControllerHistory[0].id, packet.controllerPacketId);
-          // console.log("id", packet.controllerPacketId);
           while (clientControllerHistory.length > 0 && clientControllerHistory[0].id <= packet.controllerPacketId) {
-            console.log("shifted history");
             clientControllerHistory.shift();
           }
-          const character = world.getCharacterById(networkConnection.shipId)
+          const character = world.getCharacterById(networkConnection.shipId);
           if (character === undefined) {
-            throw new Error("Ship id not found " + networkConnection.shipId)
+            throw new Error("Ship id not found " + networkConnection.shipId);
           }
           console.log("history len", clientControllerHistory.length);
           for (const history of clientControllerHistory) {
